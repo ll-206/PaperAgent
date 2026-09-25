@@ -1,0 +1,42 @@
+# 实验一 · 系统配置：PaperAgent Full（完整可信问答链路）
+# Hybrid Retrieval（BGE-M3 Dense + BM25 Sparse → RRF → BGE Reranker）
+# + Decision Engine（Intent / Evidence Judge）+ Grounding Verify + 结构化 Citation。
+system: paperagent_full
+model: deepseek
+temperature: 1.0
+
+retrieval:
+  enabled: true
+  backend: bge_m3          # 新嵌入模型
+  dense_k: 20
+  sparse: true
+  sparse_k: 20
+  fusion: rrf
+  rrf_c: 60
+  rerank: true
+  rerank_candidates: 24
+  final_k: 8
+  # 证据不足时自动扩检（Adaptive Top-K）；当前脚本首版按 rounds 扩展候选
+  adaptive_expand: true
+  max_retrieval_rounds: 2
+
+decision:
+  enabled: true
+  # Evidence Judge 判定为 ABSTAIN / SEARCH_EXTERNAL 时不强行作答
+  abstain_on_insufficient: true
+
+grounding:
+  enabled: true            # 规则 + LLM Judge 校验 unsupported claims
+
+citations:
+  enabled: true            # 产出结构化 Citation（document / page / chunk）
+
+answer:
+  prompt_template: |
+    你是一个严谨的科研助手。只能依据下面带 [C#] 编号的证据回答问题，
+    并在用到的事实后标注对应编号（如 [C1]）。证据中没有的内容不得编造；
+    若证据不足以回答，请明确说明证据不足。
+    证据：
+    {evidence}
+
+    问题：{question}

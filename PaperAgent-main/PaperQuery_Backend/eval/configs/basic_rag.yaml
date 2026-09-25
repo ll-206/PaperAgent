@@ -1,0 +1,31 @@
+# 实验一 · 系统配置：Basic RAG（固定 Top-K Dense 基线）
+# 对应升级前的 PaperQuery：旧 ONNX all-MiniLM-L6-v2 稠密检索，固定 Top-K，
+# 无 Decision Engine、无 Grounding、无证据充分性判定。
+system: basic_rag
+model: deepseek
+temperature: 1.0
+
+retrieval:
+  enabled: true
+  backend: onnx_minilm     # 旧嵌入模型（Chroma 内置 ONNX，非 BGE-M3）
+  chroma_dir_env: CHROMA_LAYER1_DIR   # 旧索引 ./res/layer1
+  top_k: 4                 # 固定 Top-K，不做自适应扩检
+  sparse: false
+  fusion: none
+  rerank: false
+
+decision:
+  enabled: false
+grounding:
+  enabled: false
+citations:
+  # Basic RAG 只在上下文里拼证据，不产出结构化可点击引用
+  enabled: false
+
+answer:
+  prompt_template: |
+    请根据下面提供的参考资料回答问题。若参考资料不足以回答，请用你自己的知识补充。
+    参考资料：
+    {evidence}
+
+    问题：{question}

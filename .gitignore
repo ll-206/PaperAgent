@@ -1,0 +1,49 @@
+# ===== 依赖（体积大，队友/评审自行 npm/pip 重建）=====
+node_modules/
+.venv/
+.conda_pkgs/
+.pip-cache/
+.npm-cache/
+
+# ===== ML 模型（5GB+，不入库，需单独分发或 LFS）=====
+**/models/
+models/
+
+# ===== 构建产物 =====
+dist/
+dist-ssr/
+coverage/
+
+# ===== 密钥与本地环境（含 DEEPSEEK 等 API Key，严禁入库）=====
+.env
+.env.*
+!.env.example
+config/.env.dev
+*.log
+
+# ===== Python 缓存 =====
+__pycache__/
+*.py[cod]
+
+# ===== 运行时数据 / 生成索引（均可重建，不入库）=====
+**/res/layer1/
+**/res/layer1_v2/
+**/res/layer2/
+**/res/bm25/
+**/res/onnx_models/
+**/res/AcadeAgent/
+**/res/pdf/
+**/res/tmp/
+**/res/tmppdf/
+
+# ===== 后端诊断 / 临时垃圾 =====
+PaperAgent-main/PaperQuery_Backend/_diag_*.log
+PaperAgent-main/PaperQuery_Backend/_faulthandler_dump.txt
+PaperAgent-main/PaperQuery_Backend/test.py
+PaperAgent-main/PaperQuery_Backend/tmp.txt
+
+# ===== OS / 编辑器 =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

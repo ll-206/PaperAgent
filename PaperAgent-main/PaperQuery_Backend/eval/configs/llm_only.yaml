@@ -1,0 +1,20 @@
+# 实验一 · 系统配置：LLM Only（无证据基线）
+# 不提供任何检索证据，直接把问题交给 LLM，用于暴露无 Grounding 时的幻觉率。
+system: llm_only
+model: deepseek            # 对应 core/llm/LLM.py 中的 key：deepseek / kimi / openai
+temperature: 1.0
+
+retrieval:
+  enabled: false           # 不检索，不提供证据
+decision:
+  enabled: false           # 不做 Intent / Evidence 判定
+grounding:
+  enabled: false           # 不做 Grounding 校验
+citations:
+  enabled: false           # 不产出引用
+
+answer:
+  # 直接回答，无证据约束
+  prompt_template: |
+    请直接回答下面的问题。如果你不确定，也请根据你的知识给出最可能的答案。
+    问题：{question}

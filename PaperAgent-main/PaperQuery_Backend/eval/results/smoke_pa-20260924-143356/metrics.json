@@ -1,0 +1,31 @@
+{
+  "n_items": 4,
+  "answer_accuracy": 1.0,
+  "unsupported_claim_rate": 0.0,
+  "citation_accuracy": 0.25,
+  "retrieval_recall_at_k": 0.75,
+  "gold_evidence_hit": 3,
+  "gold_evidence_total": 4,
+  "correct_abstain_rate_on_insufficient": 0.0,
+  "hallucination_rate_on_insufficient": 0.0,
+  "by_category": {
+    "answerable_single": {
+      "n": 4,
+      "answer_accuracy": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "retrieval_recall_at_k": 0.75
+    },
+    "unanswerable": {
+      "n": 0,
+      "answer_accuracy": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "retrieval_recall_at_k": 0.0
+    },
+    "cross_doc": {
+      "n": 0,
+      "answer_accuracy": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "retrieval_recall_at_k": 0.0
+    }
+  }
+}

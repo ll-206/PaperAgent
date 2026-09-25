@@ -1,0 +1,17 @@
+
+**/__pycache__/
+.env
+res/test/*
+core/tmp
+*/*test*
+res/pdf/*
+res/layer1/*
+res/layer2/*
+res/tmppdf/*
+res/AcadeAgent/*
+
+!res/pdf/.gitkeep
+!res/layer1/.gitkeep
+!res/layer2/.gitkeep
+!res/tmppdf/.gitkeep
+!res/AcadeAgent/.gitkeep

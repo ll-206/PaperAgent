@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.venv/
+.pip-cache/
+.npm-cache/
+
+# Build outputs
+dist/
+dist-ssr/
+coverage/
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+*.log
+*.err.log
+*.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Runtime data
+PaperQuery_Backend/res/AcadeAgent/*
+PaperQuery_Backend/res/layer1/*
+PaperQuery_Backend/res/layer2/*
+PaperQuery_Backend/res/onnx_models/*
+PaperQuery_Backend/res/pdf/*
+PaperQuery_Backend/res/tmp/*
+PaperQuery_Backend/res/tmppdf/*
+PaperQuery_Frontend/res/AcadeAgent/*
+PaperQuery_Frontend/res/layer1/*
+PaperQuery_Frontend/res/layer2/*
+PaperQuery_Frontend/res/pdf/*
+PaperQuery_Frontend/res/tmp/*
+
+!PaperQuery_Backend/res/AcadeAgent/.gitkeep
+!PaperQuery_Backend/res/layer1/.gitkeep
+!PaperQuery_Backend/res/layer2/.gitkeep
+!PaperQuery_Backend/res/onnx_models/.gitkeep
+!PaperQuery_Backend/res/pdf/.gitkeep
+!PaperQuery_Backend/res/tmp/.gitkeep
+!PaperQuery_Backend/res/tmppdf/.gitkeep
+!PaperQuery_Frontend/res/AcadeAgent/.gitkeep
+!PaperQuery_Frontend/res/layer1/.gitkeep
+!PaperQuery_Frontend/res/layer2/.gitkeep
+!PaperQuery_Frontend/res/pdf/.gitkeep
+!PaperQuery_Frontend/res/tmp/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

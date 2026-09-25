@@ -1,0 +1,5 @@
+﻿id,category,abstained,n_citations,n_evidence,grounding_passed,latency_ms
+qa-001,answerable_single,False,4,4,True,652
+qa-002,answerable_single,False,4,4,True,502
+qa-003,answerable_single,False,4,4,True,560
+qa-004,answerable_single,False,4,4,True,562

@@ -1,0 +1,4 @@
+﻿id,category,abstained,n_citations,n_evidence,grounding_passed,latency_ms
+qa-029,unanswerable,False,0,4,,3754
+qa-032,unanswerable,False,0,4,,3102
+qa-036,unanswerable,False,0,4,,1267

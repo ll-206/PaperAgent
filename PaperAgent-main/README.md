@@ -147,6 +147,29 @@ npm run dev -- --host 127.0.0.1
 
 如果 `8080` 被占用，Vite 会自动切换端口。
 
+## 模型下载（首次运行必看）
+
+仓库**不含**模型文件（体积巨大，不入库），首次运行前请分别下载 BGE-M3 与 bge-reranker-v2-m3
+到 `PaperQuery_Backend/models/` 下，目录名与默认配置一致：
+
+| 模型 | HuggingFace | 落地目录 |
+|------|-------------|---------|
+| BGE-M3（Dense 编码） | `BAAI/bge-m3` | `models/bge-m3` |
+| bge-reranker-v2-m3（重排） | `BAAI/bge-reranker-v2-m3` | `models/bge-reranker-v2-m3` |
+
+```powershell
+cd PaperQuery_Backend
+.\.venv\Scripts\python.exe -m pip install -U huggingface_hub
+
+# 国内可先设置镜像，再执行下载
+$env:HF_ENDPOINT = "https://hf-mirror.com"
+
+.\.venv\Scripts\python.exe -m huggingface_hub download BAAI/bge-m3 --local-dir models/bge-m3
+.\.venv\Scripts\python.exe -m huggingface_hub download BAAI/bge-reranker-v2-m3 --local-dir models/bge-reranker-v2-m3
+```
+
+> 若模型目录缺失，系统会自动降级为基础检索（功能仍可用，但未启用混合检索/重排）。
+
 ## 运行说明
 
 - 本项目不需要本地部署聊天大模型。

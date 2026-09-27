@@ -42,7 +42,16 @@ class DataProcessAgent:
 
         
         # 调用大模型的RAG进行论文摘要,并将摘要存储到layer2
-        json_paper= self.summarize_paper(filepath)
+        json_paper = self.summarize_paper(filepath)
+        if not isinstance(json_paper, dict):
+            # 摘要是增强信息；模型服务暂时不可用时仍应完成正文索引。
+            first_page = doc.load_page(0).get_text("text").strip()
+            json_paper = {
+                "Abstract": first_page[:1200] or "PDF 已完成正文索引。",
+                "Primary Classification": "Computer Science",
+                "Secondary Classification": "Unclassified",
+                "Research Direction Tags": [],
+            }
         metadataofpaper={
             "source":filepath,
             "Primary Classification":json_paper["Primary Classification"],# 二级分类

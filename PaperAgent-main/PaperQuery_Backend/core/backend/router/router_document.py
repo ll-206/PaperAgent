@@ -1,6 +1,6 @@
 import hashlib
 import os
-from datetime import datetime, timezone
+from datetime import datetime as DateTime, timezone
 from fastapi import APIRouter, Depends, File, Form, Path, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
@@ -126,7 +126,7 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     user = await get_current_user(token,db)
-    createtime = datetime.now(timezone.utc)
+    createtime = DateTime.now(timezone.utc)
     if addToLibrary:
         if not knowledgeID:
             return JSONResponse(
@@ -274,7 +274,7 @@ async def upload_library_document(
     uid=cal_file_md5(file_path)
 
     print("UID",uid)
-    createtime=datetime.now(timezone.utc)
+    createtime=DateTime.now(timezone.utc)
     document = DocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/pdf/",stored_name),documentStatus=0,uid=uid,knowledgeID=knowledgeID,lid=user.lid,createTime=createtime)
     ### 增加创建笔记
     addnotedata=NoteCreate(

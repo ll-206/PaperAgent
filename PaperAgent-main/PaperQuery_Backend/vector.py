@@ -1,4 +1,9 @@
 import time
+import traceback
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 import dotenv
 dotenv.load_dotenv()
@@ -68,6 +73,7 @@ if __name__ == '__main__':
                 result=dp.add_newpaper(os.getenv("AcadeAgent_DIR")+document.documentPath,document.knowledgeID)
             except Exception as e:
                 print(Fore.RED, f"文档处理失败，已回滚为排队状态: {e}", Style.RESET_ALL)
+                traceback.print_exc()
                 document.documentStatus=0
                 update_document_status(db,document)
                 time.sleep(10)

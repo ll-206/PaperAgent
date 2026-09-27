@@ -1,0 +1,10 @@
+{
+  "ready": true,
+  "counts": {
+    "paper_corpus.csv": 10,
+    "qa_groundtruth.csv": 50,
+    "research_tasks.csv": 10,
+    "security_cases.csv": 4
+  },
+  "errors": []
+}

@@ -1,0 +1,57 @@
+{
+  "status": "formal",
+  "retrieval_run": "D:\\PaperAgent\\PaperAgent-main\\PaperQuery_Backend\\competition_eval\\raw\\formal-retrieval-20260926T144543Z",
+  "ask_run": "D:\\PaperAgent\\PaperAgent-main\\PaperQuery_Backend\\competition_eval\\raw\\formal-ask-merged-20260926T152216Z",
+  "research_run": "D:\\PaperAgent\\PaperAgent-main\\PaperQuery_Backend\\competition_eval\\raw\\formal-research-20260926T144730Z",
+  "citation_coverage": 1.0,
+  "citation_questions": 40,
+  "security_boundary": {
+    "passed": 4,
+    "total": 4,
+    "scope": "Ask JWT and document ownership; in-process two-account test"
+  },
+  "metric_rows": [
+    [
+      "Recall@5",
+      0.4666666666666667,
+      14,
+      30,
+      "30 normal questions; gold page in Top-5"
+    ],
+    [
+      "Citation Accuracy",
+      0.975,
+      39,
+      40,
+      "Manual support check of cited answer pages across 30 normal and 10 scope questions"
+    ],
+    [
+      "Appropriate Refusal Rate",
+      1.0,
+      10,
+      10,
+      "Manual review of 10 unanswerable answers"
+    ],
+    [
+      "Cross-document Leakage Rate",
+      0.0,
+      0,
+      10,
+      "Manual plus citation review of 10 scope traps"
+    ],
+    [
+      "Research Task Success Rate",
+      1.0,
+      10,
+      10,
+      "Registered skills; successful steps; expected artifact"
+    ],
+    [
+      "Retrieval P95 (ms)",
+      60.76,
+      null,
+      30,
+      "30 warmed sequential retrieval requests"
+    ]
+  ]
+}

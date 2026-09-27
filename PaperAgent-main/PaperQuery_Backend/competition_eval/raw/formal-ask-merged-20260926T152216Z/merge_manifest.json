@@ -1,0 +1,14 @@
+{
+  "run_id": "formal-ask-merged-20260926T152216Z",
+  "status": "formal_merged_exact_retries",
+  "initial_attempt": "D:\\PaperAgent\\PaperAgent-main\\PaperQuery_Backend\\competition_eval\\raw\\formal-ask-20260926T144554Z\\ask_runs.jsonl",
+  "retry_attempt": "D:\\PaperAgent\\PaperAgent-main\\PaperQuery_Backend\\competition_eval\\raw\\formal-ask-20260926T151959Z\\ask_runs.jsonl",
+  "replaced_failed_question_ids": [
+    "Q048",
+    "Q049",
+    "Q050"
+  ],
+  "question_file_sha256": "15b556a2146ab02352e7f112326b7ac39ef625fbf7b6869c31b2e9768e65801a",
+  "model": "deepseek",
+  "completed_count": 50
+}

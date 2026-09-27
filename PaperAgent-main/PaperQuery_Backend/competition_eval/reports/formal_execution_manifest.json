@@ -1,0 +1,33 @@
+{
+  "created_utc": "2026-09-26T15:18:16.816973+00:00",
+  "git_head": "b919e181135de77fd73f2cc4add590cf179846c3",
+  "working_tree_dirty": true,
+  "model": "deepseek",
+  "qa_sha256": "15b556a2146ab02352e7f112326b7ac39ef625fbf7b6869c31b2e9768e65801a",
+  "runs": {
+    "retrieval": "formal-retrieval-20260926T144543Z",
+    "ask_attempt": "formal-ask-20260926T144554Z",
+    "research": "formal-research-20260926T144730Z"
+  },
+  "file_sha256": {
+    "competition_eval/datasets/qa_groundtruth.csv": "15b556a2146ab02352e7f112326b7ac39ef625fbf7b6869c31b2e9768e65801a",
+    "competition_eval/datasets/paper_corpus.csv": "d5598e2bf3bd451519d99f900c6174591bb9f8e6cb4b0afe5f7e10985f088c2f",
+    "competition_eval/datasets/research_tasks.csv": "51461b89b2a22894bb4e2891e7e6fa353be85c98b3097e2ad6f4ecc164d3ca9d",
+    "competition_eval/validate_dataset.py": "e559c785b3cf4c309d035a8deff666719ba0c1bb71cb3b287379b5f05dd54312",
+    "competition_eval/run_retrieval.py": "66e7f7a0d207822d1e1dd2c04aaf842fcd66d74ff058e00988e4a28633b572a8",
+    "competition_eval/run_ask.py": "2071becbf727b6a00bffe1a8811dbca6271d73116173c9914515bbcfc1dcfebe",
+    "competition_eval/run_research.py": "9c8a4eea5a28f8ba786f0f049ec296603d43a69b5985dad32d25910f72a6522c",
+    "competition_eval/score_minimal.py": "e4fd96f005104ada73bf3c528f0802182622558999993307e534a9ec5986c3b8",
+    "core/backend/router/router_qa.py": "5aa3c8f17047fe4b0bd5ac37351025f7f36b9b06571cae3a2861f64b13fc3feb",
+    "competition_eval/datasets/corpus/P01.pdf": "23e3249e9a1e75418d82efecab0ea8c4d033b89c93742f63208d47ce01f21233",
+    "competition_eval/datasets/corpus/P02.pdf": "d9eaa1398abac0df67a9d0933a5bf8b6d9d83d2e72da2a486073cd842dd52978",
+    "competition_eval/datasets/corpus/P03.pdf": "975aa1fd3c1b603126e93ff99d6504858b61301bf1d34c9df88ebe53a0b026cb",
+    "competition_eval/datasets/corpus/P04.pdf": "2425bd04de6e082512ef576298ec24df770a7f576bb2c23d09b3fd498f716c52",
+    "competition_eval/datasets/corpus/P05.pdf": "3c24ff147c4912a9678d778f879016099d03619267ff8b252e46a2c818b9432b",
+    "competition_eval/datasets/corpus/P06.pdf": "ff8d3bb627fce9914eb8a9e78c4139e4852771dbee801da2c766dea028a17053",
+    "competition_eval/datasets/corpus/P07.pdf": "fed0023e6fda9297e5246fb11a43e11d18585534db43fb445a9e739681155002",
+    "competition_eval/datasets/corpus/P08.pdf": "b235f6c5a71b9944ca9d97c53e1ac96cc5b6cf64760c5a68581e5bbeb3ffc636",
+    "competition_eval/datasets/corpus/P09.pdf": "1dcddce5b984e088013b7bcb66ef44c26fbc296f1504dd22d76f934f0dd95ffd",
+    "competition_eval/datasets/corpus/P10.pdf": "a45cb3d35c7b4db7091439ee714fd43dd6cd9e8f2fb1867f5463ae0433aebbd1"
+  }
+}

@@ -46,3 +46,14 @@
 若只排查流程，可对检索、Ask、Research 三项加 `--draft`；它们的输出会进入独立 `raw/draft-*` 目录，绝不能标作正式结果。正式运行前需冻结代码、论文 PDF、人工确认后的 QA CSV、模型名、temperature 和配置，记录 Git commit 与每个文件的哈希。`run_ask.py` 和 `run_research.py` 会调用真实外部模型并产生 API 用量。`make_review_sheet.py` 把答案与引用页列出供人工评分；`score_minimal.py` 只接受完整、非 draft 的原始运行和人工评分。
 
 原始详细方案的预实验记录见工作区 `artifacts/competition_eval/TEST_REPORT.md`，其中单篇论文的 60% 页码代理命中率只作为历史排查数据。
+
+## 仓库中的正式测试原始材料
+
+仓库保存 `raw/` 下的逐题运行事件、人工判分表和重试记录，`metrics/` 下的机器可读汇总，以及 `reports/` 下的复核报告、执行清单和结果解释。正式计分使用以下固定目录：
+
+- 检索：`raw/formal-retrieval-20260926T144543Z/`。
+- Ask 初次运行与同模型重试：`raw/formal-ask-20260926T144554Z/`、`raw/formal-ask-20260926T151638Z/`、`raw/formal-ask-20260926T151959Z/`；最终合并与人工判分：`raw/formal-ask-merged-20260926T152216Z/`。
+- Research：`raw/formal-research-20260926T144730Z/`；安全边界：`raw/security_boundary/`。
+- 最终指标：`metrics/formal-20260926T153126Z/`。`raw/draft-*` 明确是调试记录，不参与正式计分。
+
+仓库不收录可重建的 Chroma 二进制索引、模型缓存及本地运行数据库。10 篇原论文 PDF 由各自的 arXiv 页面提供，仓库中的 `datasets/paper_corpus.csv` 记录来源、文件大小、页数和原始 SHA-256。复现时在后端目录运行 `python competition_eval/prepare_corpus.py` 获取 PDF，再逐篇对照该 CSV 的 SHA-256；若上游 PDF 版本变化，应使用与记录哈希一致的版本，不得把新文件当作原冻结语料。随后运行 `python competition_eval/validate_dataset.py`，确认 `ready=true`，再按上文命令执行与评分。

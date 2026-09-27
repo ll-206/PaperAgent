@@ -1,0 +1,7 @@
+metric,result,numerator,denominator,definition
+Recall@5,0.4666666666666667,14,30,30 normal questions; gold page in Top-5
+Citation Accuracy,0.975,39,40,Manual support check of cited answer pages across 30 normal and 10 scope questions
+Appropriate Refusal Rate,1.0,10,10,Manual review of 10 unanswerable answers
+Cross-document Leakage Rate,0.0,0,10,Manual plus citation review of 10 scope traps
+Research Task Success Rate,1.0,10,10,Registered skills; successful steps; expected artifact
+Retrieval P95 (ms),60.76,,30,30 warmed sequential retrieval requests

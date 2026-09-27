@@ -1,0 +1,12 @@
+{
+  "run_id": "draft-retrieval-20260926T135723Z",
+  "status": "draft_not_competition_result",
+  "n": 30,
+  "page_recall_at_5": 0.5,
+  "hits": 15,
+  "retrieval_p50_ms": 25.08,
+  "retrieval_p95_ms": 79.25,
+  "outside_scope_retrieval_count": 0,
+  "question_file_sha256": "d49cae124f1b41c664e64beaac78c073b82790dda622f88314c4ae04e2fe101d",
+  "metric_definition": "Top-5 contains the gold PDF page; draft pages await independent human verification"
+}

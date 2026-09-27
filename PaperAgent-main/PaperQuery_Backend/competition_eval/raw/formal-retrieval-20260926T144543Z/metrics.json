@@ -1,0 +1,12 @@
+{
+  "run_id": "formal-retrieval-20260926T144543Z",
+  "status": "formal",
+  "n": 30,
+  "page_recall_at_5": 0.4666666666666667,
+  "hits": 14,
+  "retrieval_p50_ms": 23.77,
+  "retrieval_p95_ms": 60.76,
+  "outside_scope_retrieval_count": 0,
+  "question_file_sha256": "15b556a2146ab02352e7f112326b7ac39ef625fbf7b6869c31b2e9768e65801a",
+  "metric_definition": "Top-5 contains the independently verified gold PDF page; one selected paper per question"
+}

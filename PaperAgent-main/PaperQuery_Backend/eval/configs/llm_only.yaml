@@ -1,7 +1,7 @@
 # 实验一 · 系统配置：LLM Only（无证据基线）
 # 不提供任何检索证据，直接把问题交给 LLM，用于暴露无 Grounding 时的幻觉率。
 system: llm_only
-model: deepseek            # 对应 core/llm/LLM.py 中的 key：deepseek / kimi / openai
+model: deepseek            # 对应 core/llm/LLM.py 中的 key：deepseek / kimi / zhipu
 temperature: 1.0
 
 retrieval:

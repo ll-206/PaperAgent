@@ -12,7 +12,8 @@ from core.backend.crud.crud_knowledge import (
     get_knowledges_statistics,
 )
 from core.backend.router.dependencies import get_db
-from core.backend.schema.schema import KnowledgeCreate
+from core.backend.db.models import Knowledge
+from core.backend.schema.schema import KnowledgeCreate, KnowledgeEdit
 from core.backend.utils.utils import *
 
 router = APIRouter()
@@ -58,7 +59,7 @@ async def get_knowledges_all(token: str = Depends(oauth2_scheme),db: Session = D
 async def create_knowledges(knowledge: KnowledgeCreate, token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
     user =await get_current_user(token,db)
     # 查询是否有重复的知识名
-    if get_knowledge_by_name_uid(db, knowledge.knowledgeName,knowledge.lid):
+    if get_knowledge_by_name_uid(db, knowledge.knowledgeName, user.lid):
         return {
             "status_code": 409,
             "msg": "Knowledge name already exists",
@@ -77,4 +78,43 @@ async def create_knowledges(knowledge: KnowledgeCreate, token: str = Depends(oau
             "documentNum": created_k.documentNum,
             "vectorNum": created_k.vectorNum
         }
+    }
+
+
+@router.post("/knowledges/updateKnowledge")
+async def update_knowledge(
+    payload: KnowledgeEdit,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(token, db)
+    knowledge = db.query(Knowledge).filter(
+        Knowledge.knowledgeID == payload.knowledgeID,
+        Knowledge.lid == user.lid,
+    ).first()
+    if not knowledge:
+        return {"status_code": 404, "msg": "Knowledge not found"}
+
+    duplicate = db.query(Knowledge).filter(
+        Knowledge.lid == user.lid,
+        Knowledge.knowledgeName == payload.knowledgeName,
+        Knowledge.knowledgeID != payload.knowledgeID,
+    ).first()
+    if duplicate:
+        return {"status_code": 409, "msg": "Knowledge name already exists"}
+
+    knowledge.knowledgeName = payload.knowledgeName
+    knowledge.knowledgeDescription = payload.knowledgeDescription
+    db.commit()
+    db.refresh(knowledge)
+    return {
+        "status_code": 200,
+        "msg": "Update knowledge successfully",
+        "data": {
+            "knowledgeID": knowledge.knowledgeID,
+            "knowledgeName": knowledge.knowledgeName,
+            "knowledgeDescription": knowledge.knowledgeDescription,
+            "documentNum": knowledge.documentNum,
+            "vectorNum": knowledge.vectorNum,
+        },
     }

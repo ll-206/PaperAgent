@@ -13,7 +13,15 @@
       >
         {{ props.modelLabel }}
       </div>
-      <div class="render" v-html="renderContent(props.content)" @click="handleCitationClick" />
+      <div v-if="props.status === 'thinking' && !props.content" class="thinking-state" role="status">
+        <span>正在思考</span>
+        <span class="thinking-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+      </div>
+      <div v-else class="render" v-html="renderContent(props.content)" @click="handleCitationClick" />
     </el-card>
   </div>
 
@@ -32,7 +40,46 @@
 }
 
 :deep(.card) .el-card__body {
-  padding: 10px !important;
+  padding: 14px 16px !important;
+}
+
+:deep(.card) { border: 1px solid #e8e8ea; border-radius: 16px !important; box-shadow: none !important; transition: border-color .18s ease, background .18s ease; }
+:deep(.card:hover) { border-color: #dddde1; }
+.back-color { border-color: transparent !important; background: #f3f3f4; }
+
+.thinking-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.thinking-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #7767c5;
+  animation: thinking-pulse 1.2s ease-in-out infinite;
+}
+
+.thinking-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.thinking-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes thinking-pulse {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
 }
 </style>
 
@@ -49,6 +96,7 @@ const props = defineProps<{
   content: string
   modelLabel?: string
   citations?: CitationItem[]
+  status?: 'thinking' | 'streaming' | 'done' | 'error'
 }>()
 
 const router = useRouter()

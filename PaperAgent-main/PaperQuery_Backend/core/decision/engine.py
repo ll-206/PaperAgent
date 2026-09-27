@@ -28,6 +28,34 @@ from core.decision.schemas import (
 T = TypeVar("T", bound=BaseModel)
 
 
+_CASUAL_CHAT_PHRASES = {
+    "hello",
+    "hello there",
+    "hi",
+    "hey",
+    "how are you",
+    "你好",
+    "您好",
+    "嗨",
+    "哈喽",
+    "在吗",
+    "早上好",
+    "上午好",
+    "中午好",
+    "下午好",
+    "晚上好",
+}
+
+
+def is_obvious_general_chat(query: str) -> bool:
+    """识别无需论文证据的简短问候，避免分类模型异常时误入 RAG。"""
+    normalized = re.sub(r"[\s\W_]+", " ", query, flags=re.UNICODE).strip().lower()
+    compact = normalized.replace(" ", "")
+    return normalized in _CASUAL_CHAT_PHRASES or compact in {
+        phrase.replace(" ", "") for phrase in _CASUAL_CHAT_PHRASES
+    }
+
+
 def _clean_json(text: str) -> str:
     """去掉 markdown 代码块与多余空白。"""
     text = re.sub(r"\s*```(?:json)?\s*", "", text, flags=re.IGNORECASE)
@@ -53,6 +81,12 @@ class DecisionEngine:
         return model_cls.model_validate(json.loads(_clean_json(text)))
 
     def decide_intent(self, query: str, context_meta: str = "") -> IntentDecision:
+        if is_obvious_general_chat(query):
+            return IntentDecision(
+                intent=IntentType.GENERAL_CHAT,
+                confidence=1.0,
+                reason_code="CASUAL_GREETING",
+            )
         prompt = INTENT_PROMPT.format(question=query, context_meta=context_meta)
         try:
             return self._parse(self._invoke(prompt), IntentDecision)

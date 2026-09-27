@@ -256,7 +256,6 @@ import {
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRouter } from 'vue-router'
-import { useStore } from 'vuex'
 import {
   getKnowledgeList,
   createKnowledge,
@@ -270,10 +269,8 @@ import {
   type KnowledgeResponse,
 } from '@/types/type'
 
-import { type User } from '@/stores'
 import { ElNotification } from 'element-plus'
 
-const store = useStore()
 const router = useRouter()
 
 const knowCardList = ref<Knowledge[] | null>(null)
@@ -397,10 +394,7 @@ const EditEvent = async (
     ElNotification.error('知识名不能为空')
     return
   }
-  const user = store.getters.getUser as User
-  const token = `${user.tokenData.token_type} ${user.tokenData.access_token}`
   const knowledgeResp = (await editKnowledge(
-    token,
     knowledgeID,
     knowledgeName,
     knowledgeDescription,
@@ -409,7 +403,7 @@ const EditEvent = async (
     ElNotification.error('Token过期，请重新登录')
     return
   }
-  if (knowledgeResp.status_code == 402) {
+  if (knowledgeResp.status_code == 409) {
     ElNotification.error('知识名重复')
     return
   }

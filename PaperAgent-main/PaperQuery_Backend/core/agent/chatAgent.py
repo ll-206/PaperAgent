@@ -1,6 +1,6 @@
 import json
 
-from langchain_openai import OpenAI
+from langchain_openai import ChatOpenAI
 
 from core.backend.utils.utils import clean_markdown_json_blocks
 from core.llm.myprompts import *
@@ -10,7 +10,7 @@ from core.llm.myprompts import *
 class ChatAgent:
     def __init__(self,llm,streamllm,chromadb):
         self.llm=llm
-        self.streamllm:OpenAI =streamllm
+        self.streamllm: ChatOpenAI = streamllm
         self.chromadb=chromadb
         self.sqlitconnect=None
 

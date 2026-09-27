@@ -2,24 +2,23 @@
 
 PaperAgent 论文查询 AI Agent 的后端服务。基于 FastAPI，围绕论文库提供
 **可信问答（Ask Mode）**、**研究编排（Research Mode）** 与知识库管理能力，
-核心手段是「混合检索 + 证据决策 + 反幻觉校验 + 结构化引用」。
+核心手段是「ChromaDB 向量检索 + 证据决策 + 证据校验 + 结构化引用」。
 
 ## 技术栈
 
 - **Web 框架**：FastAPI + uvicorn（默认端口 8001）
-- **检索**：BGE-M3 Dense + BM25 Sparse → RRF 融合 → bge-reranker-v2-m3 重排
-  （`core/retrieval/`）
+- **检索**：ChromaDB + 本地 ONNX MiniLM 向量化；返回带文档 ID 与页码的证据片段
 - **决策**：DecisionEngine（Intent / Relatedness / Evidence，Fail-closed；`core/decision/`）
 - **反幻觉**：Grounding Verifier（Claim 拆分 + 规则/LMM-Judge；`core/evidence/grounding.py`）
 - **研究编排**：Planner → Executor → Verifier → Artifact（`core/research/`、`core/artifact/`）
 - **Skills**：内置 8 个技能（PaperSearch / PaperReader / Extract / CitationVerify 等，`core/skills/`）
-- **存储**：SQLite（业务数据，`core/backend/db/`）+ ChromaDB（V2 向量索引，`./res/layer1_v2`）+ BM25 语料（`./res/bm25`）
+- **存储**：SQLite（业务数据，`core/backend/db/`）+ ChromaDB（论文向量索引，`./res/layer1`）
 - **鉴权**：JWT
 - **前端**：见 `../PaperQuery_Frontend`；AI 编排 / 文档解析 / 高亮等库见 `requirement.txt` / `req_win.txt`
 
 ## 数据流（Ask Mode）
 
-前端 ChatGPT 式问答 → `POST /qa/stream`（SSE）→ 混合检索取结构化证据 →
+前端问答 → `POST /qa/stream`（SSE）→ ChromaDB 检索结构化证据 →
 DecisionEngine 判定（本地可答 / 需拒答 / 需扩检）→ Grounding 校验 →
 以 `meta / decision / grounding / citations / delta` 事件流式返回，附可点击的 `[C#]` 引用。
 
@@ -43,18 +42,16 @@ python -m venv .venv
 
 ```
 DEEPSEEK_API_KEY=sk-xxxx
-# 其余 V2 配置（模型/索引路径）已有默认值，见 core/common/config.py
+# 其余论文索引配置见 .env.example
 ```
 
-V2 关键默认路径（可在 `.env` 覆盖）：
+当前服务的向量索引路径（可在 `.env` 覆盖）：
 
 | 配置项 | 默认值 |
 |--------|--------|
-| `INDEX_VERSION` | `v2-bge-m3-001` |
-| `BGE_M3_MODEL_PATH` | `./models/bge-m3` |
-| `RERANKER_MODEL_PATH` | `./models/bge-reranker-v2-m3` |
-| `CHROMA_LAYER1_V2_DIR` | `./res/layer1_v2` |
-| `BM25_INDEX_DIR` | `./res/bm25` |
+| `CHROMA_LAYER1_DIR` | `./res/layer1` |
+| `CHROMA_LAYER2_DIR` | `./res/layer2` |
+| `CHROMA_ONNX_CACHE_DIR` | `./res/onnx_models/all-MiniLM-L6-v2` |
 
 ### 3. 启动
 
@@ -68,19 +65,13 @@ V2 关键默认路径（可在 `.env` 覆盖）：
 
 > 一键启动请直接用项目根目录的 `start_all.ps1`，会自动自检依赖并启动前后端。
 
-### 4. V2 索引重建（可选）
-
-需在论文量变化后重建 V2 混合检索索引：
-
-```powershell
-.venv\Scripts\python.exe scripts\reindex_v2.py
-```
+当前服务不加载 BGE-M3 / BM25 / Reranker。旧版实验代码保留在 `core/retrieval/`、`eval/` 和 `scripts/reindex_v2.py`，不参与正常启动。
 
 ## 目录速览
 
 ```
 core/
-├── retrieval/    混合检索（dense / sparse / fusion / reranker / pipeline）
+├── retrieval/    旧版混合检索实验代码（不接入服务）
 ├── decision/     DecisionEngine
 ├── evidence/     Grounding、证据格式化
 ├── skills/       Skill Framework（8 内置技能）
@@ -90,6 +81,6 @@ core/
 └── common/       配置、类型定义、通用工具
 main.py           后端入口
 vector.py         向量化轮询 Worker
-scripts/reindex_v2.py  V2 索引重建
+scripts/reindex_v2.py  旧版实验索引重建脚本
 req_win.txt / requirement.txt  依赖清单
 ```

@@ -1,5 +1,5 @@
 <template>
-  <div id="home" class="flex h-full">
+  <div id="home" class="app-shell flex min-h-screen">
     <SideBar :is-collapsed="isCollapsed" />
     <router-view class="flex-grow" />
   </div>
@@ -10,10 +10,8 @@ const isCollapsed = ref(false)
 </script>
 
 <style lang="less" scoped>
-.left {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  display: flex;
+.app-shell { background: #f7f9ff; }
+@media (max-width: 560px) {
+  .app-shell { padding-bottom: 68px; }
 }
 </style>

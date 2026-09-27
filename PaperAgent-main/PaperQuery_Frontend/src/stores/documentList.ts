@@ -3,8 +3,12 @@ import { reactive, computed } from 'vue'
 
 export type Document = {
   isLoading: boolean
-  documentID?: String | undefined
-  documentFile: File
+  documentID?: string
+  documentName: string
+  fileSize?: number
+  documentFile?: File
+  knowledgeID?: string
+  source: 'library' | 'upload'
 }
 
 export const useDocumentListStore = defineStore('documentList', () => {
@@ -15,7 +19,14 @@ export const useDocumentListStore = defineStore('documentList', () => {
   const getDocumentList = computed(() => state.documentList)
 
   function appendDocument(document: Document) {
+    if (
+      document.documentID &&
+      state.documentList.some(item => item.documentID === document.documentID)
+    ) {
+      return false
+    }
     state.documentList.push(document)
+    return true
   }
 
   function deleteDocument(index: number) {
@@ -23,16 +34,18 @@ export const useDocumentListStore = defineStore('documentList', () => {
   }
 
   function getDocumentIDs() {
-    return state.documentList.map((value, _) => {
-      return value.documentID
-    })
+    return state.documentList
+      .map(value => value.documentID)
+      .filter((id): id is string => Boolean(id))
   }
 
   function getDocumentSnapshots() {
     return state.documentList.map((value) => {
       return {
         documentID: value.documentID?.toString(),
-        documentName: value.documentFile.name,
+        documentName: value.documentName,
+        knowledgeID: value.knowledgeID,
+        source: value.source,
       }
     })
   }

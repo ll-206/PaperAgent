@@ -22,12 +22,16 @@ class PaperReaderSkill(BaseSkill):
     async def execute(self, data: PaperReaderInput, ctx: dict) -> SkillResult:
         path = data.document_path
         if not path:
-            db = ctx.get("db")
-            if db is None:
+            db_factory = ctx.get("db_factory")
+            if db_factory is None:
                 return SkillResult(ok=False, error_code="NO_DB", error_message="数据库未注入")
             from core.backend.crud.crud_document import get_document_by_uid
 
-            doc = get_document_by_uid(db, data.document_id)
+            db = db_factory()
+            try:
+                doc = get_document_by_uid(db, data.document_id)
+            finally:
+                db.close()
             if doc is None:
                 return SkillResult(ok=False, error_code="NOT_FOUND", error_message="文档不存在")
             path = os.getenv("AcadeAgent_DIR", ".") + doc.documentPath

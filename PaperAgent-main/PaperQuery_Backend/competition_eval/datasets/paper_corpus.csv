@@ -1,0 +1,11 @@
+paper_id,cluster_id,title,arxiv_id,source_url,pdf_path,page_count,text_extractable,sha256,byte_size
+P01,RAG,Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks,2005.11401,https://arxiv.org/abs/2005.11401,datasets/corpus/P01.pdf,19,1,23e3249e9a1e75418d82efecab0ea8c4d033b89c93742f63208d47ce01f21233,885323
+P02,RAG,"Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",2310.11511,https://arxiv.org/abs/2310.11511,datasets/corpus/P02.pdf,30,1,d9eaa1398abac0df67a9d0933a5bf8b6d9d83d2e72da2a486073cd842dd52978,1405127
+P03,RAG,Corrective Retrieval Augmented Generation,2401.15884,https://arxiv.org/abs/2401.15884,datasets/corpus/P03.pdf,16,1,975aa1fd3c1b603126e93ff99d6504858b61301bf1d34c9df88ebe53a0b026cb,667756
+P04,RAG,Active Retrieval Augmented Generation,2305.06983,https://arxiv.org/abs/2305.06983,datasets/corpus/P04.pdf,24,1,2425bd04de6e082512ef576298ec24df770a7f576bb2c23d09b3fd498f716c52,850866
+P05,RAG,REPLUG: Retrieval-Augmented Black-Box Language Models,2301.12652,https://arxiv.org/abs/2301.12652,datasets/corpus/P05.pdf,12,1,3c24ff147c4912a9678d778f879016099d03619267ff8b252e46a2c818b9432b,1070080
+P06,ANOMALY,Anomaly Transformer: Time Series Anomaly Detection with Association Discrepancy,2110.02642,https://arxiv.org/abs/2110.02642,datasets/corpus/P06.pdf,20,1,ff8d3bb627fce9914eb8a9e78c4139e4852771dbee801da2c766dea028a17053,10668204
+P07,ANOMALY,TranAD: Deep Transformer Networks for Anomaly Detection in Multivariate Time Series Data,2201.07284,https://arxiv.org/abs/2201.07284,datasets/corpus/P07.pdf,15,1,fed0023e6fda9297e5246fb11a43e11d18585534db43fb445a9e739681155002,1962802
+P08,ANOMALY,DCdetector: Dual Attention Contrastive Representation Learning for Time Series Anomaly Detection,2306.10347,https://arxiv.org/abs/2306.10347,datasets/corpus/P08.pdf,17,1,b235f6c5a71b9944ca9d97c53e1ac96cc5b6cf64760c5a68581e5bbeb3ffc636,1445006
+P09,ANOMALY,Multivariate Time-series Anomaly Detection via Graph Attention Network,2009.02040,https://arxiv.org/abs/2009.02040,datasets/corpus/P09.pdf,10,1,1dcddce5b984e088013b7bcb66ef44c26fbc296f1504dd22d76f934f0dd95ffd,2418421
+P10,ANOMALY,TimesNet: Temporal 2D-Variation Modeling for General Time Series Analysis,2210.02186,https://arxiv.org/abs/2210.02186,datasets/corpus/P10.pdf,23,1,a45cb3d35c7b4db7091439ee714fd43dd6cd9e8f2fb1867f5463ae0433aebbd1,4106684

@@ -8,9 +8,9 @@
       <span class="span-1 font-bold">{{
         formatName(props.fileName as string)
       }}</span>
-      <span class="span-2 text-sm text-black"
-        >PDF, {{ formatSize(props.fileSize as number) }}</span
-      >
+      <span class="span-2 text-sm text-black">
+        {{ props.source === 'library' ? 'Library' : `PDF, ${formatSize(props.fileSize || 0)}` }}
+      </span>
     </div>
     <button
       class="absolute top-0 right-0"
@@ -39,6 +39,7 @@ const props = defineProps({
   fileIndex: Number,
   fileName: String,
   fileSize: Number,
+  source: String,
 })
 
 // 删除文档

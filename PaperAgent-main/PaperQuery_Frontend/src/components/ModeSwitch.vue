@@ -1,47 +1,26 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { ElNotification } from 'element-plus'
-import {
-  useWorkspaceModeStore,
-  type WorkspaceMode,
-} from '@/stores/workspaceMode'
+import { ArrowRightLeft } from 'lucide-vue-next'
+import { useWorkspaceModeStore } from '@/stores/workspaceMode'
 
 const router = useRouter()
 const store = useWorkspaceModeStore()
 
-const modes: Array<{ value: WorkspaceMode; label: string }> = [
-  { value: 'ask', label: 'Ask' },
-  { value: 'research', label: 'Research' },
-  { value: 'experiment', label: 'Experiment' },
-]
-
-const switchMode = (m: WorkspaceMode) => {
-  store.setMode(m)
-  if (m === 'research') {
-    router.push('/home/research')
-  } else if (m === 'ask') {
-    router.push('/home/Chat')
-  } else {
-    ElNotification.info({ title: 'Experiment', message: 'Experiment 模式暂未实现' })
-  }
+const switchMode = () => {
+  store.setMode('research')
+  router.push('/home/research')
 }
 </script>
 
 <template>
-  <div class="flex items-center space-x-1 rounded-lg bg-gray-100 p-1">
-    <button
-      v-for="m in modes"
-      :key="m.value"
-      type="button"
-      class="rounded-md px-3 py-1 text-sm font-medium transition-colors"
-      :class="
-        store.mode === m.value
-          ? 'bg-white text-gray-900 shadow-sm'
-          : 'text-gray-500 hover:text-gray-700'
-      "
-      @click="switchMode(m.value)"
-    >
-      {{ m.label }}
-    </button>
-  </div>
+  <button type="button" class="mode-switch" title="切换到深度研究" @click="switchMode">
+    <ArrowRightLeft :size="15" />
+    <span>研究模式</span>
+  </button>
 </template>
+
+<style scoped>
+.mode-switch { display: inline-flex; height: 38px; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid transparent; border-radius: 11px; color: #65656b; background: #f3f3f4; font-size: 13px; font-weight: 500; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+.mode-switch:hover { color: #4f438c; background: #efedf6; box-shadow: inset 0 0 0 1px #e1ddea; }
+.mode-switch:focus-visible { outline: 3px solid rgba(109,91,208,.14); outline-offset: 1px; }
+</style>

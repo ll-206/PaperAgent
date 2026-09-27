@@ -19,7 +19,14 @@ class ArxivClient:
     ):
         self.max_results = max_results
         self.sort_by = sort_by
-        self.client = arxiv.Client()
+        # arxiv.Client 默认 page_size=100，即使只需要 2 篇也会向 API 请求
+        # max_results=100，容易触发共享出口 IP 的 429。按实际需要分页并启用重试。
+        self.client = arxiv.Client(
+            page_size=max(1, min(max_results, 100)),
+            delay_seconds=3.0,
+            # Research Skill 自带备用数据源；避免 429 时阻塞请求一分钟以上。
+            num_retries=0,
+        )
 
     def fetch_results(
         self, keywords: List[str], fetch_params: List[PARAMS]

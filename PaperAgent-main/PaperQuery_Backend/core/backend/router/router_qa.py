@@ -8,15 +8,19 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
 
+from core.backend.db.models import Document, TMPDocument
+from core.backend.router.dependencies import get_db
+from core.backend.utils.utils import get_current_user
 from core.backend.router.req_res_schema import QARequest
-from core.decision.prompts import ANSWER_PROMPT
+from core.decision.engine import DecisionEngine
+from core.decision.prompts import ANSWER_PROMPT, GENERAL_CHAT_PROMPT
+from core.decision.schemas import IntentType
 from core.evidence.formatter import build_citations, format_evidence
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 router = APIRouter()
 
 
@@ -24,24 +28,100 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _stream_model_text(agent, prompt: str):
+    """统一提取 LangChain 流式消息中的文本 token。"""
+    stream = (
+        agent.chat_simple(prompt)
+        if hasattr(agent, "chat_simple")
+        else agent.get_llm().stream(prompt)
+    )
+    for chunk in stream:
+        content = chunk.content if hasattr(chunk, "content") else str(chunk)
+        if isinstance(content, str) and content:
+            yield content
+
+
 @router.post("/qa/stream")
-def qa_stream(qa: QARequest, request: Request, token: str = Depends(oauth2_scheme)):
+def qa_stream(
+    qa: QARequest,
+    request: Request,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if qa.document_ids:
+        selected_ids = set(qa.document_ids)
+        owned_ids = {
+            row.uid for row in db.query(Document.uid).filter(
+                Document.lid == user.lid, Document.uid.in_(selected_ids)
+            ).all()
+        }
+        owned_ids.update(
+            row.uid for row in db.query(TMPDocument.uid).filter(
+                TMPDocument.lid == user.lid, TMPDocument.uid.in_(selected_ids)
+            ).all()
+        )
+        if not selected_ids.issubset(owned_ids):
+            raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
+
     trace_id = uuid.uuid4().hex[:12]
-    decision_engine = getattr(request.app, "decision_engine", None)
-    pipeline = getattr(request.app, "retrieval_pipeline", None)
+    agent = getattr(request.app, "chat_agents", {}).get(qa.model)
+    if agent is None:
+        agent = getattr(request.app, "chat_agents", {}).get("deepseek")
+    decision_engine = (
+        DecisionEngine(agent.get_llm())
+        if agent is not None
+        else getattr(request.app, "decision_engine", None)
+    )
     chroma_db = getattr(request.app, "chroma_db", None)
 
     def generate():
         # 1. Intent 判断
+        intent = None
         if decision_engine is not None:
             intent = decision_engine.decide_intent(qa.question, qa.conversation_context)
-            yield _sse("meta", {"trace_id": trace_id, "route": "LOCAL_RAG", "intent": intent.intent.value})
+            route = "GENERAL_CHAT" if intent.intent == IntentType.GENERAL_CHAT else "LOCAL_RAG"
+            yield _sse("meta", {
+                "trace_id": trace_id,
+                "route": route,
+                "intent": intent.intent.value,
+            })
+
+        # 普通聊天不需要论文证据，直接交给当前模型自然回答。
+        if intent is not None and intent.intent == IntentType.GENERAL_CHAT:
+            fallback_answer = "你好！很高兴见到你。你现在想查询、阅读或研究哪篇论文呢？"
+            if agent is not None:
+                prompt = GENERAL_CHAT_PROMPT.format(
+                    question=qa.question,
+                    conversation_context=qa.conversation_context or "（暂无）",
+                )
+            yield _sse("decision", {
+                "decision": "GENERAL_CHAT",
+                "evidence_score": 1.0,
+                "confidence": intent.confidence,
+            })
+            streamed = False
+            if agent is not None:
+                try:
+                    for text in _stream_model_text(agent, prompt):
+                        streamed = True
+                        yield _sse("delta", {"text": text})
+                except Exception:
+                    # 模型暂时不可用时仍给出友好的问候，不回退到证据不足提示。
+                    pass
+            if not streamed:
+                yield _sse("delta", {"text": fallback_answer})
+            yield _sse("grounding", {
+                "passed": True,
+                "confidence": 1.0,
+                "skipped": True,
+                "reason": "GENERAL_CHAT",
+            })
+            yield _sse("citations", {"items": []})
+            return
 
         # 2. 检索
         evidence = []
-        if pipeline is not None and qa.document_ids:
-            evidence = pipeline.search(qa.question, qa.document_ids)
-        elif chroma_db is not None and qa.document_ids:
+        if chroma_db is not None and qa.document_ids:
             evidence = chroma_db.search_evidence(
                 qa.question,
                 {"documentID": {"$in": qa.document_ids}},
@@ -68,12 +148,12 @@ def qa_stream(qa: QARequest, request: Request, token: str = Depends(oauth2_schem
                 return
 
         # 5. Answer 生成（带引用）
-        agent = getattr(request.app, "chat_agents", {}).get(qa.model)
         answer = ""
         if agent is not None:
             prompt = ANSWER_PROMPT.format(question=qa.question, evidence=evidence_text)
-            resp = agent.get_llm().invoke(prompt)
-            answer = resp.content if hasattr(resp, "content") else str(resp)
+            for text in _stream_model_text(agent, prompt):
+                answer += text
+                yield _sse("delta", {"text": text})
 
         # 6. Grounding Verify
         citations = build_citations(citation_map)
@@ -99,8 +179,12 @@ def qa_stream(qa: QARequest, request: Request, token: str = Depends(oauth2_schem
             ]
         })
 
-        # 8. 分片输出答案（模拟流式）
-        for i in range(0, len(answer), 3):
-            yield _sse("delta", {"text": answer[i:i + 3]})
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

@@ -183,7 +183,7 @@ You are a conversation recorder responsible for constantly summarizing the conve
 3. Due to limited storage space, you need to ensure a concise and accurate summary of the recorded content, ensuring that the key information of the conversation is recorded, and ensuring that the number of words after each update does not exceed 200 words
 If you understand your task, let's start recording. The information I have provided to you is as follows
 4. Your output should only include records of conversations, without any other redundant information.
-5.Summarize in English.
+5. Use the same primary language as the user's latest question; use concise Chinese by default.
 >>>
 The content of history is {context}
 The student's question is {question}

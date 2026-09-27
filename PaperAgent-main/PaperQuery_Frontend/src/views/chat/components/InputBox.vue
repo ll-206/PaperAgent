@@ -1,6 +1,6 @@
 <!-- 这是一个输入框 -->
 <template>
-  <div class="bg-color flex p-4 space-x-2 rounded-2xl w-1/2 items-end m-auto">
+  <div class="composer-box flex p-3 space-x-2 w-1/2 items-end m-auto">
     <FileUploader />
     <el-input
       id="input_1"
@@ -33,17 +33,17 @@
 @focus-border-color: #000000;
 
 .el-button {
-  background-color: #f4f4f4;
-  --el-button-hover-border-color: #f4f4f4;
-  --el-button-border-color: #f4f4f4;
-  --el-button-disabled-border-color: #f4f4f4;
+  border-radius: 10px;
+  background-color: #f1eff7;
+  --el-button-hover-border-color: #ded9ee;
+  --el-button-border-color: #e5e1f0;
+  --el-button-disabled-border-color: transparent;
   --el-button-disabled-bg-color: none;
-  --el-button-active-border-color: #f4f4f4;
+  --el-button-active-border-color: #cec7e5;
 }
 
-.bg-color {
-  background-color: #f4f4f4;
-}
+.composer-box { border: 1px solid #e3e3e6; border-radius: 18px; background: #fff; box-shadow: 0 7px 24px rgba(32,32,36,.07); transition: border-color .18s ease, box-shadow .18s ease; }
+.composer-box:focus-within { border-color: #cfc8e7; box-shadow: 0 8px 28px rgba(74,62,137,.10), 0 0 0 3px rgba(109,91,208,.07); }
 
 .el-textarea {
   font-family:

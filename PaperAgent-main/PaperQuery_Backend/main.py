@@ -11,11 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
 from langchain_core.embeddings import Embeddings
 
-from core.agent.chatAgent import *
-from core.agent.dataprocessAgent import *
-from core.backend.crud.crud_document import *
-from core.backend.crud.crud_knowledge import *
-from core.backend.crud.crud_user import *
+from core.agent.chatAgent import ChatAgent
 from core.backend.db.database import SessionLocal, engine
 from core.backend.db.models import Base
 from core.backend.router import (
@@ -29,40 +25,15 @@ from core.backend.router import (
     router_commit,
     router_qa,
     router_research,
+    router_system,
 )
-from core.backend.schema.schema import *
 from core.common.config import settings
 from core.decision.engine import DecisionEngine
 from core.llm.LLM import LLM
-from core.vectordb.chromadb import *
+from core.vectordb.chromadb import AcadeChroma
 
 
 Base.metadata.create_all(bind=engine)
-
-
-def _build_retrieval_pipeline():
-    """构建 Hybrid Retrieval Pipeline（BGE-M3 + BM25 + RRF + Reranker）。加载失败抛异常。"""
-    import pickle
-
-    from langchain_chroma import Chroma
-
-    from core.retrieval.dense import BGE3Embeddings, DenseRetriever
-    from core.retrieval.pipeline import RetrievalPipeline
-    from core.retrieval.reranker import BGEReranker
-    from core.retrieval.sparse import BM25Retriever
-
-    embedding = BGE3Embeddings(settings.BGE_M3_MODEL_PATH)
-    chroma_v2 = Chroma(
-        persist_directory=settings.CHROMA_LAYER1_V2_DIR,
-        embedding_function=embedding,
-    )
-    corpus_path = os.path.join(settings.BM25_INDEX_DIR, "corpus.pkl")
-    with open(corpus_path, "rb") as f:
-        corpus = pickle.load(f)
-    dense = DenseRetriever(chroma_v2)
-    sparse = BM25Retriever(corpus)
-    reranker = BGEReranker(settings.RERANKER_MODEL_PATH)
-    return RetrievalPipeline(dense, sparse, reranker, cfg=settings)
 
 
 def _build_skill_registry():
@@ -136,39 +107,29 @@ async def lifespan(app: FastAPI):
         app.chroma_db
     )
 
-    # 存储各模型的流式 chat agent
-    app.chat_agents = {
-        'deepseek': app.chat_agent,
-        'kimi': ChatAgent(
-            app.llm.get_llm('kimi'),
-            app.llm.get_stream_llm('kimi'),
-            app.chroma_db
-        ),
-        'openai': ChatAgent(
-            app.llm.get_llm('openai'),
-            app.llm.get_stream_llm('openai'),
-            app.chroma_db
-        ),
-    }
+    # 只注册实际配置过的模型，避免未配置模型静默回退为 DeepSeek。
+    app.chat_agents = {'deepseek': app.chat_agent}
+    for model_name in ('kimi', 'zhipu'):
+        if model_name in app.llm.get_all_llms():
+            app.chat_agents[model_name] = ChatAgent(
+                app.llm.get_llm(model_name),
+                app.llm.get_stream_llm(model_name),
+                app.chroma_db,
+            )
 
     # V2: DecisionEngine（轻量，基于 LLM Judge）
     app.decision_engine = DecisionEngine(app.llm.get_llm('deepseek'))
 
-    # V2: Hybrid Retrieval Pipeline（容错加载，失败则降级为基础检索）
-    app.retrieval_pipeline = None
-    try:
-        app.retrieval_pipeline = _build_retrieval_pipeline()
-        print("[V2] Hybrid Retrieval Pipeline 初始化完成")
-    except Exception as e:
-        print(f"[V2] Hybrid Retrieval 初始化失败，降级为基础检索: {e}")
+    # Research 与 Ask 共用现有 ChromaDB/ONNX 向量检索。
+    app.retrieval_pipeline = None  # 兼容旧状态接口；不再加载 BGE 管线。
 
     # V2: SkillRegistry + ResearchOrchestrator
     app.skill_registry = _build_skill_registry()
     research_ctx = {
-        "retrieval_pipeline": app.retrieval_pipeline,
+        "chroma_db": app.chroma_db,
         "llm": app.llm.get_llm('deepseek'),
         "decision_engine": app.decision_engine,
-        "db": SessionLocal(),
+        "db_factory": SessionLocal,
     }
     app.research_orchestrator = _build_research_orchestrator(
         app.skill_registry, app.llm.get_llm('deepseek'), research_ctx
@@ -177,10 +138,15 @@ async def lifespan(app: FastAPI):
 
     yield
     # Clean up the ML models and release resources
-    print("shoutdown!")
+    print("shutdown!")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="PaperAgent API",
+    version="2.0.0",
+    description="PaperAgent 论文问答、知识库与深度研究 API",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.FRONTEND_ORIGINS,
@@ -200,6 +166,7 @@ app.include_router(router_post.router, tags=["router_post"])
 app.include_router(router_commit.router, tags=["router_commit"])
 app.include_router(router_qa.router, tags=["router_qa"])
 app.include_router(router_research.router, tags=["router_research"])
+app.include_router(router_system.router, tags=["system"])
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

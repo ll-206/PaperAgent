@@ -188,10 +188,6 @@ yarl==1.9.4
 zipp==3.19.2
 zope.interface==6.4.post2
 
-# ===== V2 Hybrid Retrieval / Research =====
-FlagEmbedding
-rank-bm25
-sentence-transformers
+# ===== Research / Skill =====
 pydantic-settings
 alembic
-jieba

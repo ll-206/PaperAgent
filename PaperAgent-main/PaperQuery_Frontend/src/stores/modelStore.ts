@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-export type ModelType = 'deepseek' | 'kimi' | 'openai'
+export type ModelType = 'deepseek' | 'kimi' | 'zhipu'
 
 export const useModelStore = defineStore('model', () => {
   const currentModel = ref<ModelType>('deepseek')
@@ -9,11 +9,13 @@ export const useModelStore = defineStore('model', () => {
   const modelOptions = [
     { value: 'deepseek', label: 'DeepSeek' },
     { value: 'kimi', label: 'Kimi K3' },
-    { value: 'openai', label: 'OpenAI' },
+    { value: 'zhipu', label: '智谱 GLM' },
   ]
 
   function setModel(model: ModelType) {
-    currentModel.value = model
+    currentModel.value = modelOptions.some(item => item.value === model)
+      ? model
+      : 'deepseek'
   }
 
   function getModelLabel(model: ModelType | string) {

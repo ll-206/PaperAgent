@@ -1,0 +1,5 @@
+case_id,scenario,expected_status
+SEC01,Ask without JWT,401
+SEC02,Ask with invalid or expired JWT,401
+SEC03,User A selects User B document,403
+SEC04,User A selects own document,200

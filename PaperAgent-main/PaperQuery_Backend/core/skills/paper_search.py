@@ -1,6 +1,9 @@
 """paper_search：包装 arxiv_client，返回结构化论文列表。"""
 from __future__ import annotations
 
+from datetime import date, datetime
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 from core.skills.base import BaseSkill, SkillResult
@@ -29,13 +32,87 @@ class PaperSearchSkill(BaseSkill):
             PARAMS.PUBLISHED,
             PARAMS.PDF_URL,
         ]
+        provider = "arxiv"
+        warning = None
         try:
-            papers = client.fetch_results(data.keywords, fetch_params)
+            raw_papers = client.fetch_results(data.keywords, fetch_params)
         except Exception as e:
-            return SkillResult(ok=False, error_code="SEARCH_ERROR", error_message=str(e))
+            warning = f"arXiv 暂时不可用，已切换 OpenAlex: {e}"
+            provider = "openalex"
+            try:
+                papers = self._search_openalex(data.keywords, data.max_results)
+            except Exception as fallback_error:
+                return SkillResult(
+                    ok=False,
+                    error_code="SEARCH_ERROR",
+                    error_message=f"arXiv: {e}; OpenAlex: {fallback_error}",
+                )
+        else:
+            # arxiv_client 使用 PARAMS 枚举作为字典键，并包含 datetime 值。
+            # Research 结果需要写入 JSON/数据库，因此在 Skill 边界统一转换为普通 JSON 数据。
+            papers = []
+            for paper in raw_papers:
+                normalized = {}
+                for key, value in paper.items():
+                    json_key = key.value if isinstance(key, Enum) else str(key)
+                    if isinstance(value, (datetime, date)):
+                        value = value.isoformat()
+                    normalized[json_key] = value
+                normalized["provider"] = provider
+                papers.append(normalized)
+
         artifact = {
             "type": "paper_list",
             "title": ", ".join(data.keywords),
             "papers": papers,
+            "provider": provider,
         }
-        return SkillResult(ok=True, output={"papers": papers}, artifacts=[artifact])
+        output = {"papers": papers, "provider": provider}
+        if warning:
+            output["warning"] = warning
+        return SkillResult(ok=True, output=output, artifacts=[artifact])
+
+    @staticmethod
+    def _search_openalex(keywords: list[str], max_results: int) -> list[dict]:
+        """arXiv 限流时使用 OpenAlex 的公开论文元数据作为只读备用源。"""
+        import requests
+
+        response = requests.get(
+            "https://api.openalex.org/works",
+            params={
+                "search": " ".join(keywords),
+                "per-page": max(1, min(max_results, 20)),
+            },
+            headers={"User-Agent": "PaperAgent/1.0"},
+            timeout=30,
+        )
+        response.raise_for_status()
+
+        papers = []
+        for work in response.json().get("results", []):
+            abstract_index = work.get("abstract_inverted_index") or {}
+            positioned_words = [
+                (position, word)
+                for word, positions in abstract_index.items()
+                for position in positions
+            ]
+            abstract = " ".join(word for _, word in sorted(positioned_words))
+            location = work.get("best_oa_location") or work.get("primary_location") or {}
+            authors = [
+                item.get("author", {}).get("display_name", "")
+                for item in work.get("authorships", [])
+                if item.get("author", {}).get("display_name")
+            ]
+            papers.append({
+                "title": work.get("display_name", ""),
+                "authors": authors,
+                "summary": abstract,
+                "published": work.get("publication_date"),
+                "pdf_url": location.get("pdf_url") or location.get("landing_page_url"),
+                "doi": work.get("doi"),
+                "openalex_id": work.get("id"),
+                "provider": "openalex",
+            })
+        if not papers:
+            raise RuntimeError("OpenAlex 未返回匹配论文")
+        return papers

@@ -16,6 +16,12 @@ PLANNER_PROMPT = """你是科研任务规划器。根据用户的科研目标，
 {{"goal": "...", "steps": [{{"step_id": "s1", "title": "...", "skill": "<可用技能名>", "depends_on": [], "input": {{}}, "success_criteria": ["..."]}}], "expected_artifacts": ["comparison_table", "report"]}}
 
 用户目标：{goal}
+
+数据流规则：
+1. paper_search 已返回标题、作者、摘要和链接；如果后续要总结搜索结果，使用 report_generate，context 必须写成 "{{{{s1.result}}}}"（s1 替换成对应步骤 ID）。
+2. paper_reader 只读取用户本地论文库中的 document_id，绝不能拿 paper_search 的外部搜索结果调用 paper_reader。
+3. 依赖前一步数据时，必须在 input 字段中使用 "{{{{步骤ID.result}}}}"，不要使用 $s1、自然语言描述或不存在的 selected_document_id。
+4. 计划应精简且可执行，一般不超过 4 步。
 """
 
 

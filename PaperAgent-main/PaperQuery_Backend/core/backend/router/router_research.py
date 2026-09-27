@@ -3,15 +3,20 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
+from datetime import date, datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.backend.crud.crud_user import query_user
-from core.backend.db.models import Artifact, ResearchStep, ResearchTask
+from core.backend.db.models import Artifact, Document, ResearchStep, ResearchTask
 from core.backend.utils.utils import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
@@ -34,7 +39,32 @@ def _get_user(token: str, db: Session):
 class ResearchTaskCreate(BaseModel):
     goal: str
     mode: str = "research"
-    document_ids: list[str] = []
+    document_ids: list[str] = Field(default_factory=list)
+
+
+def _json_safe(value: Any) -> Any:
+    """把 Skill/第三方库结果递归转换成可持久化的 JSON 数据。"""
+    if isinstance(value, Enum):
+        return _json_safe(value.value)
+    if isinstance(value, BaseModel):
+        return _json_safe(value.model_dump())
+    if isinstance(value, dict):
+        return {
+            str(key.value if isinstance(key, Enum) else key): _json_safe(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
+def _json_dumps(value: Any) -> str:
+    # default=str 是最后一道保护，避免某个新 Skill 返回第三方自定义对象时整项任务丢失。
+    return json.dumps(_json_safe(value), ensure_ascii=False, default=str)
 
 
 @router.post("/research/tasks")
@@ -49,7 +79,17 @@ def create_task(
     if orchestrator is None:
         return {"status_code": 503, "msg": "Research 编排组件未初始化"}
 
-    state = orchestrator.run(req.goal)
+    owned_ids = {
+        row.uid for row in db.query(Document.uid).filter(Document.lid == user.lid).all()
+    }
+    if req.document_ids and not set(req.document_ids).issubset(owned_ids):
+        raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
+    allowed_ids = list(dict.fromkeys(req.document_ids)) if req.document_ids else list(owned_ids)
+
+    try:
+        state = orchestrator.run(req.goal, context={"allowed_document_ids": allowed_ids})
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Research 执行失败: {exc}") from exc
 
     # 持久化任务
     task = ResearchTask(
@@ -60,31 +100,38 @@ def create_task(
         status=state.status,
         plan_json=state.plan.model_dump_json(),
     )
-    db.add(task)
+    try:
+        db.add(task)
 
-    # 持久化步骤
-    for r in state.step_results:
-        db.add(ResearchStep(
-            step_id=r.step_id,
-            task_id=state.task_id,
-            skill_name=next((s.skill for s in state.plan.steps if s.step_id == r.step_id), ""),
-            status=r.status,
-            output_json=json.dumps(r.output, ensure_ascii=False),
-            error=r.error,
-            duration_ms=r.duration_ms,
-        ))
+        # 持久化步骤
+        for r in state.step_results:
+            db.add(ResearchStep(
+                step_id=r.step_id,
+                task_id=state.task_id,
+                skill_name=next((s.skill for s in state.plan.steps if s.step_id == r.step_id), ""),
+                status=r.status,
+                output_json=_json_dumps(r.output),
+                error=r.error,
+                duration_ms=r.duration_ms,
+            ))
 
-    # 持久化 artifacts
-    for a in state.artifacts:
-        db.add(Artifact(
-            artifact_id=a.get("artifact_id", ""),
-            task_id=state.task_id,
-            type=a.get("type", ""),
-            title=a.get("title", ""),
-            data_json=json.dumps(a, ensure_ascii=False),
-        ))
+        # 持久化 artifacts。Skill 可不指定 ID，由路由生成稳定的唯一 ID。
+        for artifact in state.artifacts:
+            safe_artifact = _json_safe(artifact)
+            artifact_id = safe_artifact.get("artifact_id") or uuid.uuid4().hex
+            safe_artifact["artifact_id"] = artifact_id
+            db.add(Artifact(
+                artifact_id=artifact_id,
+                task_id=state.task_id,
+                type=safe_artifact.get("type", ""),
+                title=safe_artifact.get("title", ""),
+                data_json=_json_dumps(safe_artifact),
+            ))
 
-    db.commit()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Research 结果保存失败: {exc}") from exc
     return {
         "status_code": 200,
         "msg": "Research task created",
@@ -98,12 +145,23 @@ def list_tasks(
     db: Session = Depends(get_db),
 ):
     user = _get_user(token, db)
-    tasks = db.query(ResearchTask).filter(ResearchTask.lid == user.lid).all()
+    tasks = (
+        db.query(ResearchTask)
+        .filter(ResearchTask.lid == user.lid)
+        .order_by(ResearchTask.created_at.desc())
+        .all()
+    )
     return {
         "status_code": 200,
         "msg": "ok",
         "data": [
-            {"task_id": t.task_id, "goal": t.goal, "status": t.status, "mode": t.mode}
+            {
+                "task_id": t.task_id,
+                "goal": t.goal,
+                "status": t.status,
+                "mode": t.mode,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
             for t in tasks
         ],
     }

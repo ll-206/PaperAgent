@@ -7,22 +7,22 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $bk   = Join-Path $root "PaperQuery_Backend"
 $ft   = Join-Path $root "PaperQuery_Frontend"
-$py   = Join-Path $bk ".venv\python.exe"
+$py   = Join-Path $bk ".venv\Scripts\python.exe"
 
 # ---- 前置自检 ----
 $missing = @()
 
 if (-not (Test-Path -LiteralPath $py)) {
-    $missing += "后端 Python 环境 .venv\python.exe"
+    $missing += "后端 Python 环境 .venv\Scripts\python.exe"
 }
 if (-not (Test-Path -LiteralPath (Join-Path $bk ".env"))) {
     $missing += "后端配置 PaperQuery_Backend\.env（可从 .env.example 复制并填入 API Key）"
 }
 if (-not (Test-Path -LiteralPath (Join-Path $bk "models\bge-m3"))) {
-    $missing += "BGE-M3 模型 models\bge-m3（缺失将导致检索降级）"
+    Write-Host "== 未安装 BGE-M3，混合检索将降级为基础检索 ==" -ForegroundColor Yellow
 }
 if (-not (Test-Path -LiteralPath (Join-Path $bk "models\bge-reranker-v2-m3"))) {
-    $missing += "Reranker 模型 models\bge-reranker-v2-m3（缺失将导致检索降级）"
+    Write-Host "== 未安装 Reranker，重排功能将暂不可用 ==" -ForegroundColor Yellow
 }
 
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue

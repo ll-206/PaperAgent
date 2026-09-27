@@ -51,7 +51,6 @@
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.7",
     "vditor": "^3.10.6",
-    "vite-plugin-top-level-await": "^1.4.1",
     "vue": "^3.4.15",
     "vue-pdf-embed": "^2.0.4",
     "vue-router": "^4.2.5",

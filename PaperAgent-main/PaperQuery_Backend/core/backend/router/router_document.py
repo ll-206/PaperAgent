@@ -13,6 +13,7 @@ from core.backend.crud.crud_document import *
 from core.backend.crud.crud_knowledge import update_knowledge_content
 from core.backend.crud.crud_note import create_note, del_note
 from core.backend.crud.crud_tmpdocument import create_tmp_document, get_tmp_document_by_filename
+from core.backend.db.models import Knowledge
 from core.backend.router.req_res_schema import DeleteDocument
 from core.backend.schema.noteschema import NoteCreate, NoteDelete
 from core.backend.schema.schema import *
@@ -24,6 +25,16 @@ router = APIRouter()
 
 @router.get("/document/getDocumentList")
 async def get_documents_all(knowledgeID:str, token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
+    user = await get_current_user(token, db)
+    knowledge = db.query(Knowledge).filter(
+        Knowledge.knowledgeID == knowledgeID,
+        Knowledge.lid == user.lid,
+    ).first()
+    if not knowledge:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"status_code": 404, "msg": "知识库不存在"},
+        )
     documents=get_document_by_knowledgeID(db, knowledgeID)
     
     filtered_documents = get_filtered_documents(documents)
@@ -36,9 +47,18 @@ async def get_documents_all(knowledgeID:str, token: str = Depends(oauth2_scheme)
 # 获取document的状态
 @router.get("/document/Info")
 async def get_document_info(documentID: str,knowledgeID:str,token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
-    await get_current_user(token,db)
+    user = await get_current_user(token,db)
     print(documentID,knowledgeID)
-    document =db.query(Document).filter(Document.uid == documentID,Document.knowledgeID==knowledgeID).first()
+    document =db.query(Document).filter(
+        Document.uid == documentID,
+        Document.knowledgeID == knowledgeID,
+        Document.lid == user.lid,
+    ).first()
+    if not document:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"status_code": 404, "msg": "未找到指定文件"},
+        )
     return {
         "status_code": 200,
         "msg": "Get document info successfully",
@@ -54,8 +74,12 @@ async def get_document_info(documentID: str,knowledgeID:str,token: str = Depends
 # 获取文档的总结
 @router.get("/document/summarize")
 async def get_document_summarize(documentID: str,knowledgeID:str,token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
-    await get_current_user(token,db)
-    document =get_document_by_uid_kid(db, documentID,knowledgeID)
+    user = await get_current_user(token,db)
+    document = db.query(Document).filter(
+        Document.uid == documentID,
+        Document.knowledgeID == knowledgeID,
+        Document.lid == user.lid,
+    ).first()
     if not document:
         return {
             "status_code": 404,
@@ -70,78 +94,157 @@ async def get_document_summarize(documentID: str,knowledgeID:str,token: str = De
     }
 ## 根据documentID获取pdf文件
 @router.get("/document/getFile")
-def get_document(documentID: str,knowledgeID:str,db: Session = Depends(get_db)):
-    Document =get_document_by_uid_kid(db, documentID,knowledgeID)
-    if not Document:
+async def get_document(
+    documentID: str,
+    knowledgeID: str,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(token, db)
+    document = db.query(Document).filter(
+        Document.uid == documentID,
+        Document.knowledgeID == knowledgeID,
+        Document.lid == user.lid,
+    ).first()
+    if not document:
         return {
             "status_code": 404,
             "msg": "document not found",
         }
-    file_path =os.getenv("AcadeAgent_DIR")+Document.documentPath
+    file_path =os.getenv("AcadeAgent_DIR")+document.documentPath
     print("File_path",file_path) # 替换成你实际的 PDF 文件路径
     return FileResponse(file_path)
 
 ## 多文件对话-文件上传 
 @router.post("/document/multi_file_chat_upload")
-async def  upload_document(request:Request,documentFile:UploadFile=File,token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
-    tmpPDFStoragePath =os.getenv("TMP_PAPER_SAVE_DIR")
+async def upload_document(
+    request: Request,
+    documentFile: UploadFile = File(...),
+    addToLibrary: bool = Form(False),
+    knowledgeID: str | None = Form(None),
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
     user = await get_current_user(token,db)
-    createtime=datetime.datetime.now(timezone.utc)
-        # 计算文件的MD5哈希值
+    createtime = datetime.now(timezone.utc)
+    if addToLibrary:
+        if not knowledgeID:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"status_code": 400, "msg": "请选择要加入的知识库"},
+            )
+        knowledge = db.query(Knowledge).filter(
+            Knowledge.knowledgeID == knowledgeID,
+            Knowledge.lid == user.lid,
+        ).first()
+        if not knowledge:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"status_code": 404, "msg": "目标知识库不存在"},
+            )
+
+    # 计算文件内容 MD5，作为跨临时上传和 Library 的统一 documentID。
     hasher = hashlib.md5()
     file_content = await documentFile.read()
     hasher.update(file_content)
     file_md5 = hasher.hexdigest()
     print("FILE_MD5",file_md5)
-    #检查临时知识库中是否存在该文件
-    document =get_tmp_document_by_filename(db, file_md5)
-    if document:
-        #直接返回
+
+    if addToLibrary:
+        existing = get_document_by_uid_kid(db, file_md5, knowledgeID)
+    else:
+        existing = get_tmp_document_by_filename(db, file_md5)
+    if existing:
         return {
             "status_code": 200,
-            "msg": "upload successfully",
+            "msg": "document already available",
             "data": {
-                "documentID": document.uid,
-                "documentName": document.documentName,
-                "vectorNum": 0,
-                "createTime": int(createtime.timestamp())
+                "documentID": existing.uid,
+                "documentName": existing.documentName,
+                "vectorNum": existing.documentVector or 0,
+                "knowledgeID": knowledgeID if addToLibrary else None,
+                "addedToLibrary": addToLibrary,
+                "createTime": int(createtime.timestamp()),
             }
         }
 
-        
-    # 重置文件内容读取位置，以便后续写入文件
-    documentFile.file.seek(0)
-    print("saving ",documentFile.filename,"...")
-    file_path=os.path.join(tmpPDFStoragePath,documentFile.filename)
+    storage_path = os.getenv("PAPER_SAVE_DIR") if addToLibrary else os.getenv("TMP_PAPER_SAVE_DIR")
+    os.makedirs(storage_path, exist_ok=True)
+    stored_name = f"{file_md5}.pdf"
+    file_path = os.path.join(storage_path, stored_name)
+    print("saving ", documentFile.filename, "as", stored_name, "...")
     with open(file_path, "wb") as buffer:
-        buffer.write(documentFile.file.read())
-    uid=cal_file_md5(file_path)
-    
-    print("UID",uid)
-    # 向量化
-    vectornum=vector_paper_for_tmp(file_path,uid,"THIS_IS_A_TMP_KID",request.app.chroma_db)
+        buffer.write(file_content)
 
-    createtime=datetime.datetime.now(timezone.utc)
-    document = TMPDocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/tmppdf/",documentFile.filename),documentStatus=0,uid=uid,knowledgeID="THIS_IS_A_TMP_KID",lid="THIS_IS_A_TMP_LID",createTime=createtime)
+    index_knowledge_id = knowledgeID if addToLibrary else "THIS_IS_A_TMP_KID"
+    vectornum = vector_paper_for_tmp(
+        file_path, file_md5, index_knowledge_id, request.app.chroma_db
+    )
 
-    create_tmp_document(db=db, document=document)
+    if addToLibrary:
+        document = DocumentCreate(
+            documentName=documentFile.filename,
+            documentPath=os.path.join("/res/pdf/", stored_name),
+            documentStatus=2,
+            uid=file_md5,
+            knowledgeID=knowledgeID,
+            lid=user.lid,
+            createTime=createtime,
+        )
+        db_document = create_document(db=db, document=document)
+        db_document.documentVector = vectornum
+        db.commit()
+        create_note(db=db, info=NoteCreate(
+            uid=file_md5, knowledgeID=knowledgeID, lid=user.lid
+        ))
+        update_knowledge_content(db, vectornum, 1, knowledgeID)
+    else:
+        document = TMPDocumentCreate(
+            documentName=documentFile.filename,
+            documentPath=os.path.join("/res/tmppdf/", stored_name),
+            documentStatus=2,
+            uid=file_md5,
+            knowledgeID="THIS_IS_A_TMP_KID",
+            lid=user.lid,
+            createTime=createtime,
+        )
+        db_document = create_tmp_document(db=db, document=document)
+        db_document.documentVector = vectornum
+        db.commit()
+
     return {
         "status_code": 200,
         "msg": "upload successfully",
         "data": {
-            "documentID": uid,
+            "documentID": file_md5,
             "documentName": documentFile.filename,
             "vectorNum": vectornum,
-            "createTime": int(createtime.timestamp())
+            "knowledgeID": knowledgeID if addToLibrary else None,
+            "addedToLibrary": addToLibrary,
+            "createTime": int(createtime.timestamp()),
         }
     }
 
 
 ## 单文件上传
 @router.post("/document/upload")
-async def  upload_document(knowledgeID:str=Form(),documentFile:UploadFile=File, token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
+async def upload_library_document(
+    knowledgeID: str = Form(...),
+    documentFile: UploadFile = File(...),
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
     pdf_storage_path =os.getenv("PAPER_SAVE_DIR")
     user =await get_current_user(token,db)
+    knowledge = db.query(Knowledge).filter(
+        Knowledge.knowledgeID == knowledgeID,
+        Knowledge.lid == user.lid,
+    ).first()
+    if not knowledge:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"status_code": 404, "msg": "目标知识库不存在"},
+        )
 
         # 计算文件的MD5哈希值
     hasher = hashlib.md5()
@@ -162,15 +265,17 @@ async def  upload_document(knowledgeID:str=Form(),documentFile:UploadFile=File, 
         
     # 重置文件内容读取位置，以便后续写入文件
     documentFile.file.seek(0)
-    print("saving ",documentFile.filename,"...")
-    file_path=os.path.join(pdf_storage_path,documentFile.filename)
+    os.makedirs(pdf_storage_path, exist_ok=True)
+    stored_name = f"{file_md5}.pdf"
+    print("saving ",documentFile.filename,"as",stored_name,"...")
+    file_path=os.path.join(pdf_storage_path,stored_name)
     with open(file_path, "wb") as buffer:
         buffer.write(documentFile.file.read())
     uid=cal_file_md5(file_path)
 
     print("UID",uid)
-    createtime=datetime.datetime.now(timezone.utc)
-    document = DocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/pdf/",documentFile.filename),documentStatus=0,uid=uid,knowledgeID=knowledgeID,lid=user.lid,createTime=createtime)
+    createtime=datetime.now(timezone.utc)
+    document = DocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/pdf/",stored_name),documentStatus=0,uid=uid,knowledgeID=knowledgeID,lid=user.lid,createTime=createtime)
     ### 增加创建笔记
     addnotedata=NoteCreate(
         uid=uid,knowledgeID=knowledgeID,lid=user.lid,
@@ -196,7 +301,11 @@ async def  upload_document(knowledgeID:str=Form(),documentFile:UploadFile=File, 
 @router.post("/document/delete")
 async def delete_document(deleteDocument:DeleteDocument,request:Request,token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
     user =await get_current_user(token,db)
-    document =get_document_by_uid_kid(db, deleteDocument.documentID,deleteDocument.knowledgeID)
+    document = db.query(Document).filter(
+        Document.uid == deleteDocument.documentID,
+        Document.knowledgeID == deleteDocument.knowledgeID,
+        Document.lid == user.lid,
+    ).first()
     if not document:
         return {
             "status_code": 404,

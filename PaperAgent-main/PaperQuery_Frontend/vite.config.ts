@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir)
 
   return {
-    assetsInclude: ['**/*.pdf','**/*.node'],
+    assetsInclude: ['**/*.pdf'],
     /**
      * 管理环境变量的配置文件存放目录
      */

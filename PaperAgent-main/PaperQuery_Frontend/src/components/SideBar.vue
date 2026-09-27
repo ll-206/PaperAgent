@@ -1,88 +1,56 @@
 <template>
-  <nav>
-    <div
-      :class="[' border-border pb-12 lg:block']"
-      class="min-w-[20px] transition-all duration-300 ease-in-out w-full"
-    >
-      <div class="p-4">
-        <Button variant="outline" class="w-full justify-center">
-          <Avatar class="mr-2 h-5 w-5">
-            <AvatarImage src="https://avatar.vercel.sh/personal.png" />
-          </Avatar>
-          <p class="text-xl font-bold">PaperAgent</p>
-        </Button>
-      </div>
-      <div class="space-y-4 py-4">
-        <div v-for="item in sidebarItems" :key="item.title" class="px-3 py-2">
-          <h3
-            v-if="!isCollapsed"
-            class="px-4 text-lg font-semibold tracking-tight"
-          >
-            {{ item.title }}
-          </h3>
-          <span v-else class="px-4 text-lg font-semibold tracking-tight" />
-          <div class="mt-2 flex flex-col space-y-1.5">
-            <router-link :to="item.link" class="flex">
-              <Button
-                class="justify-start w-full"
-                variant="ghost"
-                :class="{ 'bg-secondary': selectedItem.title === item.title }"
-                @click="selectItem(item)"
-              >
-                <component
-                  :is="item.icon"
-                  class="h-4 w-4 transition-all duration-1000 ease-in-out"
-                />
-                <span
-                  v-if="!isCollapsed"
-                  class="ml-2 transition-all duration-1000 ease-in-out"
-                  >{{ item.title }}</span
-                >
-              </Button>
-            </router-link>
-          </div>
-        </div>
-      </div>
+  <nav class="app-sidebar" :class="{ collapsed: isCollapsed }">
+    <router-link to="/home/dashboard" class="brand">
+      <span class="brand-mark"><img :src="paperAgentMark" alt="" /></span>
+      <span class="brand-copy"><strong>PaperAgent</strong></span>
+    </router-link>
+
+    <div class="nav-label">WORKSPACE</div>
+    <div class="nav-list">
+      <router-link
+        v-for="item in sidebarItems"
+        :key="item.title"
+        :to="item.link"
+        class="nav-item"
+        :class="{ active: isActive(item.link) }"
+      >
+        <component :is="item.icon" :size="19" />
+        <span>{{ item.title }}</span>
+        <i v-if="isActive(item.link)" />
+      </router-link>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="status-orb"><CircleCheck :size="17" /></div>
+      <div><strong>服务正常</strong><span><i /> DeepSeek 已连接</span></div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 import { sidebarItems } from './utils/sidebar'
-import { Avatar, AvatarImage } from './ui/avatar'
-import { Button } from '@/components/ui/button'
+import { CircleCheck } from 'lucide-vue-next'
+import paperAgentMark from '@/assets/img/paperagent-mark.png'
 
 defineProps({
   isCollapsed: Boolean,
 })
 
-const selectItem = (item: any) => {
-  selectedItem.value = item
-}
-
 const route = useRoute()
-
-const selectedItem = ref(sidebarItems[0])
-
-onMounted(() => {
-  // 在加载页面的时候根据当前的路由设置选中的按钮
-  console.log(route.path)
-  sidebarItems.forEach((item) => {
-    if (item.link === route.path) {
-      selectedItem.value = item
-    }
-  })
-  if (
-    route.path.indexOf('pdfInfo') != -1 ||
-    route.path.indexOf('knowledge') != -1
-  ) {
-    selectedItem.value = sidebarItems[1]
+const isActive = (link: string) => {
+  if (link.includes('/library')) {
+    return ['/library', '/knowledge/', '/pdfInfo/'].some((part) => route.path.includes(part))
   }
-
-  if (route.path.indexOf('forum') != -1) {
-    selectedItem.value = sidebarItems[3]
-  }
-})
+  if (link.includes('/forum')) return route.path.includes('/forum')
+  return route.path.toLowerCase().startsWith(link.toLowerCase())
+}
 </script>
 
-<style scoped></style>
+<style scoped>
+.app-sidebar { position: sticky; top: 0; z-index: 20; display: flex; flex: 0 0 224px; flex-direction: column; width: 224px; height: 100vh; padding: 18px 13px; border-right: 1px solid #e5e5e5; background: #f7f7f8; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 5px 7px 25px; color: #202123; text-decoration: none; }.brand-mark { display: grid; place-items: center; width: 32px; height: 32px; overflow: hidden; border: 1px solid #dedee1; border-radius: 9px; background: #fff; }.brand-mark img { width: 27px; height: 27px; object-fit: contain; }.brand-copy strong { display: block; font-size: 17px; font-weight: 650; letter-spacing: -.025em; }
+.nav-label { padding: 8px 12px; color: #99999e; font-size: 9px; font-weight: 600; letter-spacing: .1em; }.nav-list { display: flex; flex-direction: column; gap: 3px; }.nav-item { position: relative; display: flex; align-items: center; gap: 12px; height: 43px; padding: 0 12px; border-radius: 9px; color: #4f5054; font-size: 13px; font-weight: 500; text-decoration: none; transition: .15s; }.nav-item:hover { color: #202123; background: #ededee; }.nav-item.active { color: #202123; background: #e7e7e8; }.nav-item.active svg { color: #6d5bd0; }.nav-item.active i { display: none; }
+.sidebar-footer { display: flex; align-items: center; gap: 9px; margin-top: auto; padding: 10px; border-top: 1px solid #e1e1e3; background: transparent; }.status-orb { display: grid; place-items: center; width: 30px; height: 30px; color: #6d5bd0; }.sidebar-footer strong,.sidebar-footer span { display: block; }.sidebar-footer strong { color: #55555a; font-size: 10px; }.sidebar-footer span { margin-top: 3px; color: #929297; font-size: 8px; }.sidebar-footer span i { display: inline-block; width: 5px; height: 5px; margin-right: 4px; border-radius: 50%; background: #20a779; }
+@media (max-width: 900px) { .app-sidebar { flex-basis: 76px; width: 76px; padding: 18px 11px; }.brand { justify-content: center; padding-bottom: 24px; }.brand-copy,.nav-label,.nav-item span,.nav-item.active i,.sidebar-footer > div:last-child { display: none; }.nav-item { justify-content: center; padding: 0; }.sidebar-footer { justify-content: center; padding: 8px; } }
+@media (max-width: 560px) { .app-sidebar { position: fixed; top: auto; right: 0; bottom: 0; left: 0; flex-direction: row; width: 100%; height: 68px; padding: 7px 10px; border-top: 1px solid #e5e8f1; border-right: 0; }.brand,.nav-label,.sidebar-footer { display: none; }.nav-list { display: grid; flex: 1; grid-template-columns: repeat(5, 1fr); gap: 3px; }.nav-item { flex-direction: column; justify-content: center; gap: 3px; height: 54px; border-radius: 11px; font-size: 8px; }.nav-item span { display: block; }.nav-item.active i { display: none; } }
+</style>

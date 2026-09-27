@@ -12,6 +12,7 @@
           :content="message.content"
           :model-label="message.modelLabel"
           :citations="message.citations"
+          :status="message.status"
         />
       </div>
     </div>

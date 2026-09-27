@@ -14,14 +14,21 @@ class LocalRetrievalInput(BaseModel):
 
 class LocalRetrievalSkill(BaseSkill):
     name = "local_retrieval"
-    description = "在用户论文库内做混合检索（Dense+BM25+RRF+Reranker），返回证据片段"
+    description = "在用户论文库内使用 ChromaDB 向量检索，返回可追溯证据片段"
     input_model = LocalRetrievalInput
 
     async def execute(self, data: LocalRetrievalInput, ctx: dict) -> SkillResult:
-        pipeline = ctx.get("retrieval_pipeline")
-        if pipeline is None:
-            return SkillResult(ok=False, error_code="NO_PIPELINE", error_message="检索组件未初始化")
-        evidence = pipeline.search(data.query, data.document_ids or None)
+        chroma_db = ctx.get("chroma_db")
+        if chroma_db is None:
+            return SkillResult(ok=False, error_code="NO_VECTOR_DB", error_message="向量库未初始化")
+        allowed_ids = set(ctx.get("allowed_document_ids", []))
+        if data.document_ids and not set(data.document_ids).issubset(allowed_ids):
+            return SkillResult(ok=False, error_code="FORBIDDEN_DOCUMENT", error_message="论文不在当前任务的资料库范围内")
+        selected_ids = data.document_ids or sorted(allowed_ids)
+        if not selected_ids:
+            return SkillResult(ok=True, output={"evidence": []})
+        filter_by_document = {"documentID": {"$in": selected_ids}}
+        evidence = chroma_db.search_evidence(data.query, filter_by_document, k=data.k)
         return SkillResult(
             ok=True,
             output={"evidence": [e.model_dump() for e in evidence]},

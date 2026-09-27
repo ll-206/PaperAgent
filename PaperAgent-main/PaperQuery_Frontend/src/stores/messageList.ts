@@ -15,6 +15,7 @@ export type Message = {
   modelLabel?: string
   createdAt?: number
   citations?: CitationItem[]
+  status?: 'thinking' | 'streaming' | 'done' | 'error'
 }
 
 export const useMessageListStore = defineStore('messageList', () => {
@@ -55,6 +56,16 @@ export const useMessageListStore = defineStore('messageList', () => {
     let answer = ''
     let citations: CitationItem[] = []
 
+    state.messageList.push({
+      id: newId,
+      content: '',
+      role: 'gpt',
+      model,
+      modelLabel,
+      createdAt: Date.now(),
+      status: 'thinking',
+    })
+
     function updateMessage(id: number, content: string) {
       if (!state.messageList[id]) {
         state.messageList.push({
@@ -64,9 +75,11 @@ export const useMessageListStore = defineStore('messageList', () => {
           model,
           modelLabel,
           createdAt: Date.now(),
+          status: 'streaming',
         })
       } else {
         state.messageList[id].content += content
+        state.messageList[id].status = 'streaming'
       }
     }
 
@@ -74,6 +87,7 @@ export const useMessageListStore = defineStore('messageList', () => {
       question,
       ids,
       model,
+      memory,
       (text) => {
         answer += text
         updateMessage(newId, text)
@@ -85,6 +99,7 @@ export const useMessageListStore = defineStore('messageList', () => {
       .then(() => {
         if (state.messageList[newId]) {
           state.messageList[newId].citations = citations
+          state.messageList[newId].status = 'done'
         }
         return updateMemory(question, memory, answer)
       })
@@ -96,6 +111,9 @@ export const useMessageListStore = defineStore('messageList', () => {
       })
       .catch((error) => {
         console.error(error)
+        if (state.messageList[newId]) {
+          state.messageList[newId].status = 'error'
+        }
         addSystemMessage(`模型调用失败：${error?.message || error}`)
       })
   }
@@ -147,6 +165,7 @@ export const useMessageListStore = defineStore('messageList', () => {
       model: modelStore.currentModel,
       modelLabel: modelStore.getModelLabel(modelStore.currentModel),
       memory: useMemoryStore().getMemory,
+      summary: useMemoryStore().getMemory,
       documents: useDocumentListStore().getDocumentSnapshots(),
       messages: state.messageList,
     })

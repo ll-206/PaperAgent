@@ -1,0 +1,11 @@
+task_id,task_type,goal,selected_docs,expected_artifact,minimum_requirements
+R01,single,Analyze the method and experimental setup of paper P01 using only P01.,P01,report,Method and experimental setup both described with a source reference
+R02,single,Analyze the retrieval and reflection mechanism of paper P02 using only P02.,P02,report,Retrieval and reflection both described with a source reference
+R03,single,Analyze the anomaly detection method and evaluation of paper P06 using only P06.,P06,report,Method and evaluation both described with a source reference
+R04,comparison,Compare retrieval control in papers P01 P02 and P03 using only these papers.,P01;P02;P03,comparison_table,All three papers covered and at least two method differences sourced
+R05,comparison,Compare active retrieval strategies in papers P02 P03 and P04 using only these papers.,P02;P03;P04,comparison_table,All three papers covered and at least two method differences sourced
+R06,comparison,Compare anomaly detection methods in papers P06 P07 and P08 using only these papers.,P06;P07;P08,comparison_table,All three papers covered and at least two method differences sourced
+R07,comparison,Compare attention mechanisms in papers P06 P08 and P09 using only these papers.,P06;P08;P09,comparison_table,All three papers covered and at least two method differences sourced
+R08,report,Create a short research report on retrieval augmented generation methods in papers P01 through P05 using only those papers.,P01;P02;P03;P04;P05,report,At least three methods covered and each central claim has a source
+R09,report,Create a short research report on anomaly detection approaches in papers P06 through P10 using only those papers.,P06;P07;P08;P09;P10,report,At least three methods covered and each central claim has a source
+R10,report,Create a structured report comparing evidence use in P02 and anomaly evaluation in P06 with clear separate sections and sources.,P02;P06,report,Both papers covered in separate sections and each section has a source

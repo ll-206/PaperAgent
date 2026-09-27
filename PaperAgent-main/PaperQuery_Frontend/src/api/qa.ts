@@ -13,6 +13,7 @@ export async function askQuestionStream(
   question: string,
   documentIds: string[],
   model: string,
+  conversationContext: string,
   onDelta: (text: string) => void,
   onCitations: (citations: CitationItem[]) => void,
 ): Promise<void> {
@@ -29,6 +30,7 @@ export async function askQuestionStream(
       document_ids: documentIds,
       model,
       mode: 'ask',
+      conversation_context: conversationContext,
     }),
   })
   if (!res.ok) {

@@ -1,4 +1,4 @@
-import { PlayCircle, ListMusic, User, FlaskConical } from 'lucide-vue-next'
+import { LayoutDashboard, LibraryBig, MessagesSquare, FlaskConical, UsersRound } from 'lucide-vue-next'
 
 interface SidebarItem {
   title: string
@@ -8,28 +8,28 @@ interface SidebarItem {
 
 export const sidebarItems : SidebarItem[] = [
   {
-    title: 'DashBoard',
-    icon: PlayCircle,
+    title: '概览',
+    icon: LayoutDashboard,
     link: '/home/dashboard',
   },
   {
-    title: 'Library',
+    title: '论文库',
     link: '/home/library',
-    icon: ListMusic,
+    icon: LibraryBig,
   },
   {
-    title: 'Chat',
+    title: '智能问答',
     link: '/home/chat',
-    icon: User,
+    icon: MessagesSquare,
   },
   {
-    title: 'Research',
+    title: '深度研究',
     link: '/home/research',
     icon: FlaskConical,
   },
   {
     title: '论坛',
     link: '/home/forum/threads',
-    icon: User,
+    icon: UsersRound,
   },
 ]

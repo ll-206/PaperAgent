@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
+import { CalendarDays, ExternalLink, FileText, Users } from 'lucide-vue-next'
 
 interface ArtifactData {
   artifact_id: string
@@ -30,7 +31,8 @@ const highlightCode = (str: string, lang: string): string => {
 
 const md = new MarkdownIt({
   breaks: true,
-  html: true,
+  // 模型输出属于不可信内容，不允许注入任意 HTML。
+  html: false,
   linkify: true,
   highlight: highlightCode,
 })
@@ -66,13 +68,27 @@ const rawText = computed(() => {
   if (typeof d.raw === 'string') return d.raw
   return JSON.stringify(d, null, 2)
 })
+
+const papers = computed<Array<Record<string, any>>>(() => {
+  if (props.artifact.type !== 'paper_list') return []
+  return props.artifact.data?.papers || []
+})
+
+const formatAuthors = (authors: unknown) => {
+  if (!Array.isArray(authors) || authors.length === 0) return '作者信息暂缺'
+  const names = authors.slice(0, 4).join('、')
+  return authors.length > 4 ? `${names} 等` : names
+}
 </script>
 
 <template>
-  <div class="rounded-lg border p-4">
-    <div class="mb-2 flex items-center justify-between">
-      <span class="text-sm font-medium">{{ artifact.title }}</span>
-      <el-tag size="small">{{ artifact.type }}</el-tag>
+  <article class="artifact-card">
+    <div class="artifact-header">
+      <div class="artifact-heading">
+        <span class="artifact-icon"><FileText :size="16" /></span>
+        <div><small>研究结果</small><strong>{{ artifact.title }}</strong></div>
+      </div>
+      <el-tag size="small" effect="light">{{ artifact.type }}</el-tag>
     </div>
 
     <!-- Markdown 报告 -->
@@ -81,6 +97,29 @@ const rawText = computed(() => {
       class="render"
       v-html="md.render(markdown)"
     />
+
+    <!-- 论文检索结果 -->
+    <div v-else-if="papers.length" class="paper-list">
+      <a
+        v-for="(paper, index) in papers"
+        :key="paper.openalex_id || paper.doi || paper.pdf_url || index"
+        class="paper-item"
+        :href="paper.pdf_url || paper.doi || undefined"
+        :target="paper.pdf_url || paper.doi ? '_blank' : undefined"
+        rel="noopener noreferrer"
+      >
+        <span class="paper-index">{{ String(index + 1).padStart(2, '0') }}</span>
+        <div class="paper-copy">
+          <strong>{{ paper.title || '未命名论文' }}</strong>
+          <div class="paper-meta">
+            <span><Users :size="12" /> {{ formatAuthors(paper.authors) }}</span>
+            <span v-if="paper.published"><CalendarDays :size="12" /> {{ paper.published }}</span>
+          </div>
+          <p v-if="paper.summary">{{ paper.summary }}</p>
+        </div>
+        <ExternalLink v-if="paper.pdf_url || paper.doi" :size="16" class="external-icon" />
+      </a>
+    </div>
 
     <!-- 对比表 -->
     <el-table v-else-if="tableData" :data="tableData.rows" border size="small" max-height="400">
@@ -93,13 +132,14 @@ const rawText = computed(() => {
     </el-table>
 
     <!-- 其他：展示原始文本 -->
-    <pre v-else class="whitespace-pre-wrap text-sm text-gray-700">{{ rawText }}</pre>
-  </div>
+    <pre v-else class="raw-output">{{ rawText }}</pre>
+  </article>
 </template>
 
 <style scoped>
-:deep(.render) {
-  font-size: 0.875rem;
-  line-height: 1.6;
-}
+.artifact-card { overflow: hidden; border: 1px solid #e6e6e8; border-radius: 11px; background: #fff; }
+.artifact-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 15px; border-bottom: 1px solid #ececee; background: #fafafa; }.artifact-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }.artifact-icon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 8px; color: #6d5bd0; background: #f0eef8; }.artifact-heading small,.artifact-heading strong { display: block; }.artifact-heading small { color: #96969b; font-size: 8px; font-weight: 500; letter-spacing: 0; }.artifact-heading strong { overflow: hidden; margin-top: 2px; color: #3c3c40; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+:deep(.render) { padding: 18px; color: #465169; font-size: 13px; line-height: 1.75; }:deep(.render h1),:deep(.render h2),:deep(.render h3) { color: #253049; }:deep(.render table) { width: 100%; border-collapse: collapse; }:deep(.render th),:deep(.render td) { padding: 8px; border: 1px solid #e3e7f0; }
+.paper-list { display: grid; gap: 8px; padding: 12px; }.paper-item { display: flex; align-items: flex-start; gap: 11px; padding: 12px; border: 1px solid #ececee; border-radius: 9px; color: inherit; text-decoration: none; background: #fff; transition: .15s; }.paper-item:hover { border-color: #d0ccdE; background: #fafafa; transform: none; box-shadow: none; }.paper-index { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 7px; color: #6254af; background: #f0eef8; font-size: 9px; font-weight: 600; }.paper-copy { flex: 1; min-width: 0; }.paper-copy strong { display: block; color: #37373b; font-size: 12px; line-height: 1.5; }.paper-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; color: #8e8e93; font-size: 9px; }.paper-meta span { display: flex; align-items: center; gap: 4px; }.paper-copy p { display: -webkit-box; overflow: hidden; margin: 8px 0 0; color: #707075; font-size: 10px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }.external-icon { flex: none; margin-top: 5px; color: #99999e; }
+.raw-output { overflow: auto; max-height: 420px; margin: 0; padding: 16px; color: #5c667a; background: #fbfcfe; font-size: 11px; line-height: 1.6; white-space: pre-wrap; }
 </style>

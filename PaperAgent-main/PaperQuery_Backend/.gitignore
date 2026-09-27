@@ -3,7 +3,6 @@
 .env
 res/test/*
 core/tmp
-*/*test*
 res/pdf/*
 res/layer1/*
 res/layer2/*

@@ -7,11 +7,12 @@
     <div class="flex overflow-x-auto p-2 space-x-4">
       <DocumentInfo
         v-for="(document, index) in documentList"
-        :key="document.documentFile.name + document.documentFile.size"
+        :key="document.documentID || document.documentName"
         :is-loading="document.isLoading"
         :file-index="index"
-        :file-name="document.documentFile.name"
-        :file-size="document.documentFile.size"
+        :file-name="document.documentName"
+        :file-size="document.fileSize"
+        :source="document.source"
       />
     </div>
   </div>

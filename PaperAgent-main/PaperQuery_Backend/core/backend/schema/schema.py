@@ -29,6 +29,12 @@ class KnowledgeCreate(BaseModel):
 class KnowledgeUpdate(KnowledgeCreate):
     documentNum: int | None = None
     vectorNum: int | None = None
+
+
+class KnowledgeEdit(BaseModel):
+    knowledgeID: str
+    knowledgeName: str
+    knowledgeDescription: str | None = None
 # 用户所有知识描述
 
 # 知识获取

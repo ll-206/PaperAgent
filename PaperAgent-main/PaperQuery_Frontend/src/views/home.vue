@@ -1,6 +1,9 @@
 <template>
   <div id="home" class="app-shell flex min-h-screen">
-    <SideBar :is-collapsed="isCollapsed" />
+    <SideBar
+      :is-collapsed="isCollapsed"
+      @toggle-collapse="isCollapsed = !isCollapsed"
+    />
     <router-view class="flex-grow" />
   </div>
 </template>

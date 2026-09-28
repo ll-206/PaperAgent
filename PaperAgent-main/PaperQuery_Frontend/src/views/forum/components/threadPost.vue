@@ -1,6 +1,6 @@
 <!-- 发布帖子组件 -->
 <template>
-  <Dialog :open="isDialogOpen">
+  <Dialog :open="isDialogOpen" @update:open="isDialogOpen = $event">
     <DialogTrigger as-child
       ><Button
         variant="outline"

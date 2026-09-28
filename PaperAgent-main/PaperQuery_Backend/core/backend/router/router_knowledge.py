@@ -1,8 +1,10 @@
 
+import os
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
 
 from core.backend.crud.crud_knowledge import (
     create_knowledge,
@@ -11,8 +13,11 @@ from core.backend.crud.crud_knowledge import (
     get_knowledge_by_name_uid,
     get_knowledges_statistics,
 )
+from core.backend.crud.crud_note import del_note
 from core.backend.router.dependencies import get_db
-from core.backend.db.models import Knowledge
+from core.backend.db.models import Document, Knowledge, TMPDocument
+from core.backend.router.req_res_schema import DeleteKnowledge
+from core.backend.schema.noteschema import NoteDelete
 from core.backend.schema.schema import KnowledgeCreate, KnowledgeEdit
 from core.backend.utils.utils import *
 
@@ -117,4 +122,78 @@ async def update_knowledge(
             "documentNum": knowledge.documentNum,
             "vectorNum": knowledge.vectorNum,
         },
+    }
+
+
+# 批量删除知识（级联删除其下文档的向量、笔记与源文件）
+@router.post("/knowledges/deleteKnowledge")
+async def delete_knowledges(
+    payload: DeleteKnowledge,
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(token, db)
+    deleted = []
+    failed = []
+    for kid in payload.knowledgeIDs:
+        knowledge = (
+            db.query(Knowledge)
+            .filter(Knowledge.knowledgeID == kid, Knowledge.lid == user.lid)
+            .first()
+        )
+        if not knowledge:
+            failed.append(kid)
+            continue
+        # 级联删除该知识下的文档
+        docs = (
+            db.query(Document)
+            .filter(Document.knowledgeID == kid, Document.lid == user.lid)
+            .all()
+        )
+        for doc in docs:
+            # 删除向量（layer1 / layer2）
+            try:
+                request.app.chroma_db.delete_paper_from_layer1(kid, doc.uid)
+                request.app.chroma_db.delete_paper_from_layer2(kid, doc.uid)
+            except Exception:
+                pass
+            # 删除该文档的笔记
+            try:
+                del_note(
+                    db=db,
+                    delNote=NoteDelete(uid=doc.uid, knowledgeID=kid, lid=user.lid),
+                )
+            except Exception:
+                pass
+            # 若没有其他知识仍引用同一文档，则删除源文件
+            try:
+                other = (
+                    db.query(Document)
+                    .filter(
+                        Document.uid == doc.uid,
+                        Document.knowledgeID != kid,
+                    )
+                    .first()
+                )
+                if not other:
+                    file_path = os.getenv("AcadeAgent_DIR") + doc.documentPath
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+            except Exception:
+                pass
+            db.delete(doc)
+        # 删除该知识下的临时文档记录
+        db.query(TMPDocument).filter(
+            TMPDocument.knowledgeID == kid,
+            TMPDocument.lid == user.lid,
+        ).delete(synchronize_session=False)
+        # 删除知识本身
+        db.delete(knowledge)
+        db.commit()
+        deleted.append(kid)
+    return {
+        "status_code": 200,
+        "msg": "知识删除成功" if deleted else "未找到可删除的知识",
+        "data": {"deleted": deleted, "failed": failed},
     }

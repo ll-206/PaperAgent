@@ -25,6 +25,10 @@ class DeleteDocument(BaseModel):
     knowledgeID: str
 
 
+class DeleteKnowledge(BaseModel):
+    knowledgeIDs: list[str]
+
+
 class TranslateRequest(BaseModel):
     text: str
 

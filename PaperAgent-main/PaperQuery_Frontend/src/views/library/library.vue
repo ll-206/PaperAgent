@@ -1,6 +1,11 @@
 <template>
   <div class="flex-col w-full p-8">
-    <h1 class="text-2xl font-bold items-center mb-8">knowledge Library</h1>
+    <div class="flex items-center justify-between mb-8">
+      <h1 class="text-2xl font-bold">knowledge Library</h1>
+      <Button variant="outline" class="px-4 py-2" @click="toggleSelectMode">
+        {{ selectMode ? '取消选择' : '删除知识' }}
+      </Button>
+    </div>
     <div v-if="knowCardList" class="flex space-x-4 mb-6">
       <Input type="text" placeholder="Filter apps..." class="w-1/2" />
       <Popover v-model:open="open">
@@ -111,10 +116,27 @@
       <Card
         v-for="card in knowCardList"
         :key="card.knowledgeName"
-        class="flex-col"
+        class="flex-col relative"
       >
         <CardHeader>
           <CardTitle>{{ card.knowledgeName }}</CardTitle>
+          <!-- 删除模式下右上角的勾选圆圈 -->
+          <button
+            v-if="selectMode"
+            type="button"
+            class="absolute top-3 right-3 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors"
+            :class="
+              selectedIds.has(card.knowledgeID)
+                ? 'bg-red-500 border-red-500'
+                : 'bg-white border-gray-300 hover:border-gray-400'
+            "
+            @click.stop="toggleSelect(card.knowledgeID)"
+          >
+            <Check
+              v-if="selectedIds.has(card.knowledgeID)"
+              class="h-4 w-4 text-white"
+            />
+          </button>
           <!-- <CardDescription>
             <label class="text-1xl">描述</label>
           </CardDescription> -->
@@ -216,6 +238,38 @@
       </div>
     </div>
   </div>
+  <!-- 删除模式底部操作条 -->
+  <div
+    v-if="selectMode"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 rounded-lg border bg-white px-6 py-3 shadow-xl"
+  >
+    <span class="text-sm font-medium text-gray-700 mr-2">
+      已选 {{ selectedIds.size }} 项
+    </span>
+    <Button
+      variant="outline"
+      class="px-4"
+      @click="selectAll"
+      :disabled="!knowCardList || knowCardList.length === 0"
+    >
+      全选
+    </Button>
+    <Button
+      variant="outline"
+      class="px-4"
+      @click="cancelSelect"
+      :disabled="selectedIds.size === 0"
+    >
+      取消已选
+    </Button>
+    <Button
+      class="px-4 bg-red-500 hover:bg-red-600 text-white"
+      @click="confirmDelete"
+      :disabled="selectedIds.size === 0"
+    >
+      确认删除
+    </Button>
+  </div>
   <!-- <router-view /> -->
 </template>
 
@@ -257,6 +311,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRouter } from 'vue-router'
 import {
+  deleteKnowledge,
   getKnowledgeList,
   createKnowledge,
   editKnowledge,
@@ -269,7 +324,7 @@ import {
   type KnowledgeResponse,
 } from '@/types/type'
 
-import { ElNotification } from 'element-plus'
+import { ElMessageBox, ElNotification } from 'element-plus'
 
 const router = useRouter()
 
@@ -309,6 +364,68 @@ onMounted(async () => {
 })
 const open = ref(false)
 const value = ref('')
+
+// 删除模式：多选状态与操作
+const selectMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+
+// 进入/退出删除模式，退出时清空选中
+const toggleSelectMode = () => {
+  selectMode.value = !selectMode.value
+  selectedIds.value = new Set()
+}
+
+// 勾选/取消勾选单个知识
+const toggleSelect = (knowledgeID: string) => {
+  const next = new Set(selectedIds.value)
+  if (next.has(knowledgeID)) next.delete(knowledgeID)
+  else next.add(knowledgeID)
+  selectedIds.value = next
+}
+
+// 全选当前列表
+const selectAll = () => {
+  selectedIds.value = new Set(
+    (knowCardList.value ?? []).map((c) => c.knowledgeID),
+  )
+}
+
+// 取消所有已选
+const cancelSelect = () => {
+  selectedIds.value = new Set()
+}
+
+// 确认删除选中知识
+const confirmDelete = async () => {
+  const ids = [...selectedIds.value]
+  if (ids.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${ids.length} 个知识库？其下全部文档、向量与源文件将一并删除，且不可恢复。`,
+      '确认删除',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteKnowledge(ids)
+    // 从列表中移除已删除的知识
+    knowCardList.value = (knowCardList.value ?? []).filter(
+      (c) => !selectedIds.value.has(c.knowledgeID),
+    )
+    ElNotification.success(`已删除 ${ids.length} 个知识库`)
+  } catch (error: any) {
+    ElNotification.error(error.message || '删除失败')
+  } finally {
+    selectedIds.value = new Set()
+    selectMode.value = false
+  }
+}
 
 const router_knowledge = (knowledgeID: string) => {
   router.push({ name: 'knowledge', params: { knowledgeID: knowledgeID } })

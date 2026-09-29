@@ -13,7 +13,16 @@
       >
         {{ props.modelLabel }}
       </div>
-      <div v-if="props.status === 'thinking' && !props.content" class="thinking-state" role="status">
+      <div v-if="props.searchSteps?.length" class="search-progress" aria-live="polite">
+        <div class="progress-title">学术检索进度</div>
+        <div v-for="(step, index) in props.searchSteps" :key="`${index}-${step}`" class="progress-step">
+          <span class="progress-marker" :class="{ active: index === props.searchSteps.length - 1 && props.searchState !== 'done' }">
+            {{ index === props.searchSteps.length - 1 && props.searchState !== 'done' ? '•' : '✓' }}
+          </span>
+          <span>{{ step }}</span>
+        </div>
+      </div>
+      <div v-if="props.status === 'thinking' && !props.content && !props.searchSteps?.length" class="thinking-state" role="status">
         <span>正在思考</span>
         <span class="thinking-dots" aria-hidden="true">
           <i />
@@ -22,11 +31,15 @@
         </span>
       </div>
       <div v-else class="render" v-html="renderContent(props.content)" @click="handleCitationClick" />
+      <ExternalPaperList v-if="props.externalPapers?.items.length" :result="props.externalPapers" />
     </el-card>
   </div>
 
   <div v-else class="flex justify-end">
     <el-card shadow="hover" class="back-color card rounded-3xl">
+      <div v-if="props.documents?.length" class="attached-papers">
+        <span v-for="document in props.documents" :key="document.documentID" class="attached-paper">📄 {{ document.documentName }}</span>
+      </div>
       <div class="render" v-html="renderMarkdown(props.content)" />
     </el-card>
   </div>
@@ -46,6 +59,13 @@
 :deep(.card) { border: 1px solid #e8e8ea; border-radius: 16px !important; box-shadow: none !important; transition: border-color .18s ease, background .18s ease; }
 :deep(.card:hover) { border-color: #dddde1; }
 .back-color { border-color: transparent !important; background: #f3f3f4; }
+.attached-papers { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.attached-paper { max-width: 260px; overflow: hidden; padding: 4px 7px; border-radius: 6px; background: #e5e0f7; color: #4d428e; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.search-progress { margin: 4px 0 14px; padding: 10px 12px; border-radius: 10px; background: #f5f7fb; }
+.progress-title { color: #374151; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.progress-step { display: flex; align-items: flex-start; gap: 8px; margin-top: 4px; color: #6b7280; font-size: 12px; line-height: 1.5; }
+.progress-marker { display: inline-flex; flex: 0 0 14px; color: #2b8a68; font-weight: 700; }
+.progress-marker.active { color: #7767c5; animation: thinking-pulse 1.2s ease-in-out infinite; }
 
 .thinking-state {
   display: inline-flex;
@@ -90,13 +110,21 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import type { CitationItem } from '@/api/qa'
+import type { ExternalPaperResult } from '@/api/qa'
+import ExternalPaperList from './ExternalPaperList.vue'
+import type { ChatDocumentSnapshot } from '@/stores/chatHistory'
 
 const props = defineProps<{
   role: string
   content: string
   modelLabel?: string
   citations?: CitationItem[]
+  externalPapers?: ExternalPaperResult
+  searchStatus?: string
+  searchState?: 'preparing' | 'searching' | 'answering' | 'done'
+  searchSteps?: string[]
   status?: 'thinking' | 'streaming' | 'done' | 'error'
+  documents?: ChatDocumentSnapshot[]
 }>()
 
 const router = useRouter()

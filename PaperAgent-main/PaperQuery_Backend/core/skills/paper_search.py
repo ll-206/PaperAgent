@@ -59,7 +59,23 @@ class PaperSearchSkill(BaseSkill):
                         value = value.isoformat()
                     normalized[json_key] = value
                 normalized["provider"] = provider
+                normalized["venue"] = normalized.get("journal_ref") or "arXiv 预印本"
+                normalized["source_type"] = "preprint"
                 papers.append(normalized)
+
+            # arXiv may return no matches without raising an exception. Use the
+            # same fallback as for a failed request so Ask can show real results.
+            if not papers:
+                provider = "openalex"
+                warning = "arXiv 未找到匹配论文，已切换 OpenAlex"
+                try:
+                    papers = self._search_openalex(data.keywords, data.max_results)
+                except Exception as fallback_error:
+                    return SkillResult(
+                        ok=False,
+                        error_code="SEARCH_ERROR",
+                        error_message=f"arXiv 无结果；OpenAlex: {fallback_error}",
+                    )
 
         artifact = {
             "type": "paper_list",
@@ -98,6 +114,7 @@ class PaperSearchSkill(BaseSkill):
             ]
             abstract = " ".join(word for _, word in sorted(positioned_words))
             location = work.get("best_oa_location") or work.get("primary_location") or {}
+            source = location.get("source") or (work.get("primary_location") or {}).get("source") or {}
             authors = [
                 item.get("author", {}).get("display_name", "")
                 for item in work.get("authorships", [])
@@ -112,6 +129,8 @@ class PaperSearchSkill(BaseSkill):
                 "doi": work.get("doi"),
                 "openalex_id": work.get("id"),
                 "provider": "openalex",
+                "venue": source.get("display_name") or "来源未注明",
+                "source_type": source.get("type") or "unknown",
             })
         if not papers:
             raise RuntimeError("OpenAlex 未返回匹配论文")

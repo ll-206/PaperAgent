@@ -9,6 +9,7 @@ def create_post(db:Session,postCreate:PostCreate):
         username=postCreate.username,
         postid=postCreate.postid,
         title=postCreate.title,
+        category=postCreate.category,
         content=postCreate.content,
         publishtime=postCreate.publishtime,
         updatetime=postCreate.publishtime

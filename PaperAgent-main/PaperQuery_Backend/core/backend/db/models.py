@@ -8,7 +8,9 @@
 # @File : models.py
 
 
-from sqlalchemy import TIMESTAMP, Column, Integer, String, Text, func
+from datetime import datetime
+
+from sqlalchemy import TIMESTAMP, Column, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import column_property
 
 from .database import Base
@@ -87,6 +89,7 @@ class Post(Base):
     username = Column(String(255), nullable=False)
     postid = Column(String(255), nullable=False)
     title = Column(String(255), nullable=False)
+    category = Column(String(20), nullable=False, default='技术', server_default='技术')
     content = Column(Text, nullable=True)
     publishtime = Column(TIMESTAMP,nullable=True)
     publishtime_timestamp = column_property(func.extract('epoch', publishtime).cast(Integer))
@@ -115,6 +118,7 @@ class ResearchTask(Base):
     lid = Column(String(255), index=True, nullable=False)
     goal = Column(Text, nullable=False)
     mode = Column(String(32), default="research")
+    parent_task_id = Column(String(64), index=True, nullable=True)
     status = Column(String(32), index=True, nullable=False)
     plan_json = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
@@ -157,3 +161,17 @@ class Artifact(Base):
     type = Column(String(32))
     title = Column(String(255))
     data_json = Column(Text)
+
+
+class ActivityEvent(Base):
+    """Account activity used by the daily overview and reading timer."""
+
+    __tablename__ = 'activity_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lid = Column(String(255), index=True, nullable=False)
+    event_type = Column(String(32), index=True, nullable=False)
+    knowledge_id = Column(String(255))
+    document_id = Column(String(255))
+    duration_seconds = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now, index=True, nullable=False)

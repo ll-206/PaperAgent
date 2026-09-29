@@ -3,6 +3,15 @@ import { LoginResponse } from '@/types/type'
 // import api from '@/api/api'
 import axios from 'axios'
 
+export const register = async (url: string, user: { username: string; password: string }) => {
+  try {
+    const response = await axios.post(`${url}/register`, user, { timeout: 10000 })
+    return response.data
+  } catch (error: any) {
+    throw new Error(error?.response?.data?.detail || error?.response?.data?.msg || '注册失败，请稍后重试')
+  }
+}
+
 export const login = async (url: string, user: any): Promise<LoginResponse> => {
   const api = axios.create({
     baseURL: url,

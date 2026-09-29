@@ -1,13 +1,16 @@
 <template>
   <div class="flex-col w-full p-8">
     <div class="flex items-center justify-between mb-8">
-      <h1 class="text-2xl font-bold">knowledge Library</h1>
-      <Button variant="outline" class="px-4 py-2" @click="toggleSelectMode">
-        {{ selectMode ? '取消选择' : '删除知识' }}
-      </Button>
+      <h1 class="text-2xl font-bold">论文库</h1>
+      <div class="flex gap-2">
+        <Button variant="outline" class="px-4 py-2" @click="router.push('/home/library/notes')">笔记集</Button>
+        <Button variant="outline" class="px-4 py-2" @click="toggleSelectMode">
+          {{ selectMode ? '取消选择' : '删除知识' }}
+        </Button>
+      </div>
     </div>
     <div v-if="knowCardList" class="flex space-x-4 mb-6">
-      <Input type="text" placeholder="Filter apps..." class="w-1/2" />
+      <Input v-model="searchTerm" type="text" placeholder="搜索知识库名称或描述" class="w-1/2" />
       <Popover v-model:open="open">
         <PopoverTrigger as-child>
           <Button
@@ -17,29 +20,25 @@
             class="w-[200px] justify-between"
           >
             {{
-              value
-                ? knowCardList.find((card) => card.knowledgeName === value)
-                    ?.knowledgeDescription
-                : 'All Apps'
+              value || '全部知识库'
             }}
             <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent class="w-[200px] p-0">
           <Command>
-            <CommandInput class="h-9" placeholder="Search apps..." />
-            <CommandEmpty>No apps found.</CommandEmpty>
+            <CommandInput class="h-9" placeholder="选择知识库" />
+            <CommandEmpty>没有匹配的知识库</CommandEmpty>
             <CommandList>
               <CommandGroup>
+                <CommandItem value="全部知识库" @select="value = ''; open = false">全部知识库</CommandItem>
                 <CommandItem
                   v-for="card in knowCardList"
                   :key="card.knowledgeName"
-                  :value="card.knowledgeName"
+                    :value="card.knowledgeName"
                   @select="
                     (ev) => {
-                      if (typeof ev.detail.value === 'string') {
-                        value = ev.detail.value
-                      }
+                      value = card.knowledgeName
                       open = false
                     }
                   "
@@ -114,7 +113,7 @@
         </Dialog>
       </Card>
       <Card
-        v-for="card in knowCardList"
+        v-for="card in filteredCardList"
         :key="card.knowledgeName"
         class="flex-col relative"
       >
@@ -329,6 +328,13 @@ import { ElMessageBox, ElNotification } from 'element-plus'
 const router = useRouter()
 
 const knowCardList = ref<Knowledge[] | null>(null)
+const searchTerm = ref('')
+const filteredCardList = computed(() => (knowCardList.value || []).filter((card) => {
+  const matchesSelected = !value.value || card.knowledgeName === value.value
+  const needle = searchTerm.value.trim().toLowerCase()
+  const matchesSearch = !needle || `${card.knowledgeName} ${card.knowledgeDescription || ''}`.toLowerCase().includes(needle)
+  return matchesSelected && matchesSearch
+}))
 
 const newCard = ref({
   knowledgeName: '',

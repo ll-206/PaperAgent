@@ -43,7 +43,7 @@ export const getForumPost = async (postid: string) => {
 }
 
 // 发布帖子
-export const postForumPost = async (title: string, content: string) => {
+export const postForumPost = async (title: string, content: string, category: string) => {
     try {
         let token = localStorage.getItem('token')
         if (token) {
@@ -52,6 +52,7 @@ export const postForumPost = async (title: string, content: string) => {
         const data = {
             title: title,
             content: content,
+            category,
         }
         const resp = await api.post('/forum/createpost', data, {
             headers: {

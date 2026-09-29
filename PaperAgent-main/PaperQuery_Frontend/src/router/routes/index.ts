@@ -41,6 +41,11 @@ const routes: Array<RouteRecordRaw> = [
         path: 'library',
         component: () => import('@/views/library/library.vue'),
       },
+      {
+        path: 'library/notes',
+        name: 'notesCollection',
+        component: () => import('@/views/library/notesCollection.vue'),
+      },
       // 知识页面
       {
         path: 'knowledge/:knowledgeID',

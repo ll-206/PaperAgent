@@ -4,7 +4,7 @@
     ref="messageContainer"
     class="flex justify-center overflow-y-auto p-8 mb-14"
   >
-    <div class="w-1/2">
+    <div class="w-full max-w-4xl">
       <Empty v-show="messageList.length === 0" />
       <div v-for="message in messageList" :key="message.id" class="mb-10">
         <MessageBox
@@ -12,7 +12,12 @@
           :content="message.content"
           :model-label="message.modelLabel"
           :citations="message.citations"
+          :external-papers="message.externalPapers"
+          :search-status="message.searchStatus"
+          :search-state="message.searchState"
+          :search-steps="message.searchSteps"
           :status="message.status"
+          :documents="message.documents"
         />
       </div>
     </div>

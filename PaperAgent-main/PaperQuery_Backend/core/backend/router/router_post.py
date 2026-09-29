@@ -1,4 +1,4 @@
-from fastapi import APIRouter,Depends
+from fastapi import APIRouter,Depends,HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import uuid
@@ -14,6 +14,8 @@ router=APIRouter()
 
 @router.post("/forum/createpost")
 async def create_user_post(postCreateRequest:PostCreateRequest,token:str=Depends(oauth2_schema),db:Session=Depends(get_db)):
+    if postCreateRequest.category not in {'技术', '生活', '学习', '创意', '好玩', '问与答', '城市', '其他'}:
+        raise HTTPException(422, '无效的帖子分类')
     #获取当前用户
     user =await get_current_user(token,db)
     createtime=datetime.now(timezone.utc)
@@ -21,6 +23,7 @@ async def create_user_post(postCreateRequest:PostCreateRequest,token:str=Depends
         lid=user.lid,
         postid=str(uuid.uuid1()),
         title=postCreateRequest.title,
+        category=postCreateRequest.category,
         content=postCreateRequest.content,
         username=user.username,
         publishtime=int(createtime.timestamp()),

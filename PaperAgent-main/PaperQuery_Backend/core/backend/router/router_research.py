@@ -40,6 +40,7 @@ class ResearchTaskCreate(BaseModel):
     goal: str
     mode: str = "research"
     document_ids: list[str] = Field(default_factory=list)
+    parent_task_id: str | None = None
 
 
 def _json_safe(value: Any) -> Any:
@@ -86,8 +87,18 @@ def create_task(
         raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
     allowed_ids = list(dict.fromkeys(req.document_ids)) if req.document_ids else list(owned_ids)
 
+    parent = None
+    prior_artifacts = []
+    if req.parent_task_id:
+        parent = db.query(ResearchTask).filter(ResearchTask.task_id == req.parent_task_id, ResearchTask.lid == user.lid).first()
+        if parent is None:
+            raise HTTPException(status_code=404, detail="上一轮研究任务不存在")
+        prior_artifacts = [json.loads(item.data_json) for item in db.query(Artifact).filter(Artifact.task_id == parent.task_id).all() if item.data_json]
+    prior_digest = "\n".join(f"- {item.get('title', '')}: {str(item.get('markdown') or item.get('report') or item.get('papers') or item.get('raw') or '')[:500]}" for item in prior_artifacts[:4])
+    planning_goal = req.goal if not parent else f"{req.goal}\n\n上一轮研究目标：{parent.goal}\n上一轮结果：\n{prior_digest[:1800]}"
+
     try:
-        state = orchestrator.run(req.goal, context={"allowed_document_ids": allowed_ids})
+        state = orchestrator.run(planning_goal, context={"allowed_document_ids": allowed_ids, "parent_task_id": req.parent_task_id, "prior_artifacts": prior_artifacts})
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Research 执行失败: {exc}") from exc
 
@@ -97,6 +108,7 @@ def create_task(
         lid=user.lid,
         goal=req.goal,
         mode=req.mode,
+        parent_task_id=req.parent_task_id,
         status=state.status,
         plan_json=state.plan.model_dump_json(),
     )
@@ -160,6 +172,7 @@ def list_tasks(
                 "goal": t.goal,
                 "status": t.status,
                 "mode": t.mode,
+                "parent_task_id": t.parent_task_id,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in tasks
@@ -188,6 +201,7 @@ def get_task(
             "task_id": task.task_id,
             "goal": task.goal,
             "status": task.status,
+            "parent_task_id": task.parent_task_id,
             "plan": json.loads(task.plan_json) if task.plan_json else None,
             "steps": [
                 {

@@ -11,23 +11,39 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { ElNotification } from 'element-plus'
-import { login } from '@/api/auth'
+import { login, register } from '@/api/auth'
 import paperAgentMark from '@/assets/img/paperagent-mark.png'
 
 const username = ref('')
 const password = ref('')
+const confirmPassword = ref('')
+const registering = ref(false)
+const busy = ref(false)
 const router = useRouter()
 
 const url = ref('http://localhost:8001')
 
 // 向后端发送登录请求并将用户信息存储到 Vuex 和 localStorage 中
 const Login = async () => {
+  if (busy.value) return
+  if (registering.value && password.value !== confirmPassword.value) {
+    ElNotification.error({ title: '注册失败', message: '两次输入的密码不一致' })
+    return
+  }
+  busy.value = true
   const user = {
     username: username.value,
     password: password.value,
   }
 
   try {
+    if (registering.value) {
+      await register(url.value, user)
+      registering.value = false
+      confirmPassword.value = ''
+      ElNotification.success({ title: '注册成功', message: '请使用新账户登录' })
+      return
+    }
     await login(url.value, user)
     ElNotification({
       title: '登录成功',
@@ -38,7 +54,7 @@ const Login = async () => {
   } catch (error) {
     if (error instanceof Error) {
       ElNotification({
-        title: '登录失败',
+        title: registering.value ? '注册失败' : '登录失败',
         type: 'error',
         message: error.message,
         customClass: 'login-notify-fade-up',
@@ -47,13 +63,13 @@ const Login = async () => {
     } else {
       // 处理非 Error 对象的情况
       ElNotification({
-        title: '登录失败',
+        title: registering.value ? '注册失败' : '登录失败',
         type: 'error',
         message: '发生未知错误',
         customClass: 'login-notify-fade-up',
       })
     }
-  }
+  } finally { busy.value = false }
 }
 </script>
 
@@ -99,8 +115,8 @@ const Login = async () => {
         <Card class="login-card">
           <form @submit.prevent="Login">
             <CardHeader>
-              <CardTitle>欢迎回来</CardTitle>
-              <p class="card-description">登录后继续访问你的论文库与研究任务</p>
+              <CardTitle>{{ registering ? '创建 PaperAgent 账户' : '欢迎回来' }}</CardTitle>
+              <p class="card-description">{{ registering ? '注册后即可建立自己的论文库与研究工作空间' : '登录后继续访问你的论文库与研究任务' }}</p>
             </CardHeader>
 
             <CardContent>
@@ -122,15 +138,21 @@ const Login = async () => {
                     v-model="password"
                     type="password"
                     placeholder="请输入密码"
-                    autocomplete="current-password"
+                    :autocomplete="registering ? 'new-password' : 'current-password'"
+                    :minlength="registering ? 8 : undefined"
                     required
                   />
+                </div>
+                <div v-if="registering" class="flex flex-col space-y-1.5">
+                  <Label for="confirm-password">确认密码</Label>
+                  <Input id="confirm-password" v-model="confirmPassword" type="password" autocomplete="new-password" placeholder="再次输入密码" required />
                 </div>
               </div>
             </CardContent>
             <CardFooter class="login-footer">
-              <Button type="submit" class="login-button">登录</Button>
-              <p>本地体验账号：admin / 123456</p>
+              <Button type="submit" class="login-button" :disabled="busy">{{ busy ? '请稍候…' : registering ? '注册账户' : '登录' }}</Button>
+              <button type="button" class="auth-switch" @click="registering = !registering; confirmPassword = ''">{{ registering ? '已有账户？返回登录' : '没有账户？立即注册' }}</button>
+              <p v-if="!registering">本地体验账号：admin / 123456</p>
             </CardFooter>
           </form>
         </Card>
@@ -192,7 +214,7 @@ const Login = async () => {
   flex: 1;
   flex-direction: column;
   justify-content: center;
-  gap: 34px;
+  gap: 38px;
   position: relative;
 }
 .brand-logo {
@@ -205,8 +227,8 @@ const Login = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: #e7e9f0;
   box-shadow:
@@ -214,19 +236,19 @@ const Login = async () => {
     -4px -4px 8px #ffffff;
 }
 .brand-logo-badge img {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
 }
 .brand-wordmark {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #333333;
 }
 .brand-headline h1 {
   margin: 0;
-  font-size: 40px;
+  font-size: 44px;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -241,20 +263,20 @@ const Login = async () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 320px;
+  max-width: 360px;
 }
 .feature-card {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 15px 18px;
+  padding: 19px 22px;
   border: none;
   border-radius: 16px;
   background: #e7e9f0;
   box-shadow:
     4px 4px 8px #acb2bd,
     -4px -4px 8px #ffffff;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 500;
   color: #333333;
   transition: all 0.3s ease-in-out;
@@ -263,8 +285,8 @@ const Login = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: #e9e6f9;
   color: #6d5bd0;
@@ -274,8 +296,8 @@ const Login = async () => {
     inset -2px -2px 4px rgba(255, 255, 255, 0.8);
 }
 .feature-icon :deep(svg) {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
 }
 .brand-tagline {
   margin: 0;
@@ -372,6 +394,8 @@ const Login = async () => {
   font-size: 10px;
   text-align: center;
 }
+.auth-switch { color: #5e4bc2; font-size: 13px; font-weight: 600; }
+.auth-switch:hover { text-decoration: underline; }
 
 /* ===== 响应式降级：<1024px 只保留表单 ===== */
 @media (min-width: 1024px) {

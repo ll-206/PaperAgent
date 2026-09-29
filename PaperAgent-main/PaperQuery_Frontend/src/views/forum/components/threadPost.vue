@@ -63,10 +63,8 @@
             class="col-span-3 p-2 border rounded-md"
             required
           >
-            <option value="">请选择一个节点</option>
-            <option value="programming">编程</option>
-            <option value="technology">科技</option>
-            <option value="life">生活</option>
+            <option value="">请选择分类</option>
+            <option v-for="category in ['技术','生活','学习','创意','好玩','问与答','城市','其他']" :key="category" :value="category">{{ category }}</option>
           </select>
         </div>
       </div>
@@ -109,7 +107,7 @@ const post = ref({
 })
 
 const submitPost = () => {
-  if (post.value.title.trim() === '' || post.value.content.trim() === '') {
+  if (post.value.title.trim() === '' || post.value.topic === '') {
     ElNotification({
       title: '错误',
       message: '标题和主题节点为必填项',
@@ -122,7 +120,7 @@ const submitPost = () => {
 
   // You can replace this with the actual function to save the post
   console.log('Post submitted:', post.value)
-  postForumPost(post.value.title, post.value.content)
+  postForumPost(post.value.title, post.value.content, post.value.topic)
     .then((res) => {
       closeDialog()
       ElNotification({

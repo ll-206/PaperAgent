@@ -84,11 +84,11 @@ PaperAgent/
 cd PaperQuery_Backend
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirement.txt
+pip install -r req_win.txt
 copy .env.example .env
 ```
 
-编辑 `.env`，填入模型和翻译服务配置：
+编辑 `.env`，填入自己的模型 API Key 和随机 `SECRET_KEY`。英中翻译使用可选的离线包，安装方式见 [快速启动.md](./快速启动.md)：
 
 ```env
 DEEPSEEK_API_KEY=
@@ -98,12 +98,10 @@ KIMI_API_BASE=https://api.moonshot.cn/v1
 ZHIPU_API_KEY=
 ZHIPU_API_BASE=https://open.bigmodel.cn/api/paas/v4/
 ZHIPU_MODEL=glm-4-flash
-TENCENT_SECRET_ID=
-TENCENT_SECRET_KEY=
-
 # 本地论文向量索引
 CHROMA_LAYER1_DIR=./res/layer1
 CHROMA_LAYER2_DIR=./res/layer2
+CHROMA_ONNX_CACHE_DIR=./res/onnx_models_v5/all-MiniLM-L6-v2
 ```
 
 启动后端 API：

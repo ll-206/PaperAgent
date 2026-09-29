@@ -46,9 +46,7 @@
         <div class="mt-2 text-xs text-gray-500">
           {{ session.documents.length ? `绑定 ${session.documents.length} 篇论文` : '未绑定论文' }}
         </div>
-        <p v-if="session.summary" class="session-summary" :title="session.summary">
-          {{ session.summary }}
-        </p>
+        <p class="session-summary">{{ visiblePreview(session) }}</p>
         <div
           v-if="session.documents.length"
           class="mt-2 truncate text-xs text-gray-400"
@@ -67,6 +65,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { FileText, LoaderCircle, Pencil } from 'lucide-vue-next'
 import { useChatHistoryStore, type ChatSession } from '@/stores/chatHistory'
 import { useMessageListStore } from '@/stores/messageList'
+import { useDocumentListStore } from '@/stores/documentList'
 import { useModelStore, type ModelType } from '@/stores/modelStore'
 import { useMemoryStore } from '@/stores/memory'
 import { updateMemory } from '@/api/chat'
@@ -87,7 +86,13 @@ function restoreSession(session: ChatSession) {
   historyStore.useSession(session.id)
   modelStore.setModel(session.model as ModelType)
   messageListStore.restoreMessages(session.messages, session.memory)
+  useDocumentListStore().restoreDocuments(session.documents || [], session.selectedDocumentIDs)
   ElMessage.success('已恢复历史会话')
+}
+
+function visiblePreview(session: ChatSession) {
+  return session.messages.filter(message => (message.role === 'user' || message.role === 'gpt') && message.content.trim())
+    .slice(-2).map(message => `${message.role === 'user' ? '提问' : '回答'}：${message.content.trim().slice(0, 100)}`).join('  ·  ')
 }
 
 async function renameSession(session: ChatSession) {

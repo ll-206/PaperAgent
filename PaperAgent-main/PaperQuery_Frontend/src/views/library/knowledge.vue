@@ -2,7 +2,7 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { computed, ref } from 'vue'
-import { ElNotification } from 'element-plus'
+import { ElMessageBox, ElNotification } from 'element-plus'
 import { formatName } from '@/components/utils'
 import { Label } from '@/components/ui/label'
 import { useRouter } from 'vue-router'
@@ -75,7 +75,7 @@ const filterTableData = computed(() =>
   tableData.value.filter((data) => {
     const searchValue = search.value.toLowerCase()
     const nameMatches = data.documentName.toLowerCase().includes(searchValue)
-    const tagMatches = data.documentTags.some(
+    const tagMatches = (data.documentTags || []).some(
       (tag) => tag && tag.toLowerCase().includes(searchValue.toLowerCase()),
     )
     return !search.value || nameMatches || tagMatches
@@ -104,6 +104,7 @@ const handleView = async (index: number, row: Document) => {
 // 删除文档 处理函数
 const handleDelete = async (index: number, row: Document) => {
   try {
+    await ElMessageBox.confirm(`确认删除 ${row.documentName}？该论文及笔记将从论文库移除。`, '删除论文', { type: 'warning' })
     const resp = await deleteDocument(knowledgeID, row.documentID)
     if (resp) {
       ElNotification({
@@ -112,12 +113,13 @@ const handleDelete = async (index: number, row: Document) => {
         type: 'success',
       })
       // 删除该行数据
-      tableData.value.splice(index, 1)
+      tableData.value = tableData.value.filter(item => item.documentID !== row.documentID)
       // 同步移除对话页已绑定的该文档，避免残留 ID 仍在 Chat 会话中显示
       useDocumentListStore().deleteDocumentById(row.documentID)
       console.log(index)
     }
   } catch (error: any) {
+    if (error === 'cancel' || error === 'close') return
     ElNotification({
       title: 'Error',
       message: `文件删除失败：${error.message}`,
@@ -152,6 +154,7 @@ const handleFileUpload = async (event: Event) => {
     progress.value = 0
     uploadTaskStatus.value = true
     await processQueue(knowledgeID)
+    target.value = ''
     // 关闭进度条显示
     uploadTaskStatus.value = false
     if (processingDocList.value.length === 0) {
@@ -237,6 +240,7 @@ const checkDocumentStatus = async () => {
           }
         }
       } catch (error: any) {
+        processDone = false
         ElNotification({
           title: 'Error',
           message: `获取文档状态失败：${error.message}`,
@@ -280,10 +284,7 @@ const formatterName = (row: Document) => {
   // 定义超过 5 个字符显示省略号
   const maxLength = 20
   // 去除文件名后缀
-  return formatName(
-    row['documentName'].slice(0, row['documentName'].indexOf('.pdf')),
-    maxLength,
-  )
+  return formatName(row.documentName.replace(/\.pdf$/i, ''), maxLength)
 }
 
 const formatterTime = (row: Document) => {
@@ -291,11 +292,9 @@ const formatterTime = (row: Document) => {
   if (!row || !row.createTime) {
     return ''
   }
-  if (row.createTime.toString().length === 10) {
-    row.createTime *= 1000
-  }
+  const timestamp = row.createTime.toString().length === 10 ? Number(row.createTime) * 1000 : row.createTime
   const now = moment()
-  const inputTime = moment(row.createTime)
+  const inputTime = moment(timestamp)
   const diffInHours = now.diff(inputTime, 'hours')
 
   if (diffInHours < 1) {
@@ -319,7 +318,7 @@ const isOpen = ref(true)
 
 <template>
   <div class="flex-col w-full p-8">
-    <h1 class="text-2xl font-bold mb-8">knowledge Documents</h1>
+    <h1 class="text-2xl font-bold mb-8">论文文档</h1>
     <div class="flex-col mb-6">
       <div class="flex space-x-4 mb-6 w-full">
         <Input v-model="search" type="text" placeholder="搜索" class="w-1/2" />
@@ -344,10 +343,10 @@ const isOpen = ref(true)
         <el-table-column
           fixed
           :formatter="formatterName"
-          label="Document Name"
+          label="论文名称"
           prop="documentName"
         />
-        <el-table-column label="Tag" prop="documentTags">
+        <el-table-column label="标签" prop="documentTags">
           <template #default="{ row }">
             <div>
               <el-tag
@@ -362,7 +361,7 @@ const isOpen = ref(true)
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="Status" prop="documentStatus">
+        <el-table-column label="状态" prop="documentStatus">
           <template #default="{ row }">
             <div>
               <el-tag
@@ -386,9 +385,9 @@ const isOpen = ref(true)
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="Vector Number" prop="vectorNum" />
+        <el-table-column label="索引块数" prop="vectorNum" />
         <el-table-column
-          label="Create Time"
+          label="创建时间"
           prop="createTime"
           :formatter="formatterTime"
         />
@@ -403,7 +402,7 @@ const isOpen = ref(true)
               "
               @click="handleView(scope.$index, scope.row)"
             >
-              View
+              阅读
             </el-button>
             <el-button
               class="text-sm"
@@ -414,7 +413,7 @@ const isOpen = ref(true)
               "
               @click="handleDelete(scope.$index, scope.row)"
             >
-              Delete
+              删除
             </el-button>
           </template>
         </el-table-column>

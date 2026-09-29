@@ -5,6 +5,8 @@ from core.backend.crud.crud_note import get_note, update_note
 from core.backend.schema.noteschema import NoteQuery, NoteRequest, NoteUpdate,NoteUpdateRequest
 from core.backend.utils.utils import *
 from core.backend.router.dependencies import get_db
+from core.backend.db.models import Document, Note
+from fastapi import HTTPException
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 router = APIRouter()
 
@@ -15,11 +17,19 @@ router = APIRouter()
 async def get_current_note(token: str=Depends(oauth2_scheme),db:Session=Depends(get_db),noteRequest:NoteRequest=Depends()):
     #获取当前用户
     user =await get_current_user(token,db)
+    document = db.query(Document).filter(
+        Document.uid == noteRequest.documentID,
+        Document.knowledgeID == noteRequest.knowledgeID,
+        Document.lid == user.lid,
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
     request_data = NoteQuery(knowledgeID=noteRequest.knowledgeID, lid=user.lid, uid=noteRequest.documentID)
     notequeryresult = get_note(db, request_data)
-    db.commit()
     if not notequeryresult:
-        raise HTTPException(status_code=404, detail="Note not found")
+        notequeryresult = Note(knowledgeID=noteRequest.knowledgeID, lid=user.lid, uid=noteRequest.documentID, note="")
+        db.add(notequeryresult)
+        db.commit()
     #根据条件进行查询
     return{
         "status_code":200,
@@ -34,6 +44,18 @@ async def get_current_note(token: str=Depends(oauth2_scheme),db:Session=Depends(
 async def update_current_note(noteUpdateRequest:NoteUpdateRequest,token:str=Depends(oauth2_scheme),db:Session=Depends(get_db)):
     #获取当前用户
     user =await get_current_user(token,db)
+    document = db.query(Document).filter(
+        Document.uid == noteUpdateRequest.documentID,
+        Document.knowledgeID == noteUpdateRequest.knowledgeID,
+        Document.lid == user.lid,
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    request_data = NoteQuery(knowledgeID=noteUpdateRequest.knowledgeID, lid=user.lid, uid=noteUpdateRequest.documentID)
+    if not get_note(db, request_data):
+        db.add(Note(knowledgeID=noteUpdateRequest.knowledgeID, lid=user.lid, uid=noteUpdateRequest.documentID, note=noteUpdateRequest.note))
+        db.commit()
+        return {"status_code": 200, "msg": "update note successfully"}
     #更新笔记
     updateQueryData=NoteUpdate(
         knowledgeID=noteUpdateRequest.knowledgeID,

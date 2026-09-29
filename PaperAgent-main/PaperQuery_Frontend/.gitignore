@@ -34,3 +34,5 @@ lerna-debug.log*
 components.d.ts
 auto-import.d.ts
 .eslintrc-auto-import.json
+# TypeScript incremental build cache
+*.tsbuildinfo

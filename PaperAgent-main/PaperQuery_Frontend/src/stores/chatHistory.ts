@@ -19,6 +19,7 @@ export type ChatSession = {
   summary?: string
   isTitleCustomized?: boolean
   documents: ChatDocumentSnapshot[]
+  selectedDocumentIDs?: string[]
   messages: Message[]
 }
 

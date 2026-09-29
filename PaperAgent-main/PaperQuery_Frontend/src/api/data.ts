@@ -15,7 +15,7 @@ export const getLibraryInfo = async () => {
     })
     return resp.data
   } catch (e: any) {
-    throw new Error(e.response.data.msg)
+    throw new Error(e.response?.data?.msg || e.message || '读取论文库失败')
   }
 }
 
@@ -230,7 +230,7 @@ export const translateText = async (text: string) => {
     })
     return resp.data
   } catch (e: any) {
-    throw new Error(e.response.data.msg)
+    throw new Error(e.response?.data?.detail || e.response?.data?.msg || e.message || '翻译失败')
   }
 }
 

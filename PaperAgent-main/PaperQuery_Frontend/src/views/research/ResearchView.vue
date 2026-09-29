@@ -6,6 +6,8 @@ import {
   BookOpenCheck,
   BrainCircuit,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   FileSearch,
   FlaskConical,
@@ -26,6 +28,7 @@ interface TaskItem {
   status: string
   mode: string
   created_at?: string
+  parent_task_id?: string
 }
 
 interface StepInfo {
@@ -33,6 +36,7 @@ interface StepInfo {
   title?: string
   skill_name: string
   status: string
+  parent_task_id?: string
   error?: string
   duration_ms?: number
 }
@@ -58,6 +62,8 @@ const creating = ref(false)
 const tasks = ref<TaskItem[]>([])
 const currentTask = ref<TaskDetail | null>(null)
 const loadingDetail = ref(false)
+const historyCollapsed = ref(true)
+const parentTaskId = ref('')
 
 const quickGoals = [
   '检索并比较近三年多模态大模型的代表性方法与数据集',
@@ -100,10 +106,11 @@ const handleCreate = async () => {
   if (!goal.value.trim()) return
   creating.value = true
   try {
-    const resp = await createResearchTask(goal.value.trim())
+    const resp = await createResearchTask(goal.value.trim(), 'research', [], parentTaskId.value || undefined)
     if (resp?.data) {
       ElNotification.success(`任务已创建：${resp.data.task_id}`)
       goal.value = ''
+      parentTaskId.value = ''
       await loadTasks()
       await selectTask(resp.data.task_id)
     }
@@ -112,6 +119,27 @@ const handleCreate = async () => {
   } finally {
     creating.value = false
   }
+}
+
+const retryTask = async (task: Pick<TaskItem, 'task_id' | 'goal'>) => {
+  goal.value = task.goal
+  parentTaskId.value = task.task_id
+  await handleCreate()
+}
+
+const continueFromTask = (task: TaskDetail) => {
+  parentTaskId.value = task.task_id
+  goal.value = `基于“${task.goal}”的研究结果，进一步研究：`
+  document.querySelector('.hero-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const focusTask = async (taskId: string) => {
+  await selectTask(taskId)
+  document.getElementById('research-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const focusArtifact = (artifactId: string) => {
+  document.getElementById(`artifact-${artifactId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 const selectTask = async (taskId: string) => {
@@ -172,6 +200,7 @@ onMounted(() => {
       </div>
 
       <div class="composer">
+        <div v-if="parentTaskId" class="continuation-label">接续任务 {{ parentTaskId }} <button type="button" @click="parentTaskId = ''">取消关联</button></div>
         <el-input
           v-model="goal"
           type="textarea"
@@ -202,25 +231,26 @@ onMounted(() => {
     </section>
 
     <section class="stats-grid">
-      <div class="stat-card"><FlaskConical /><div><strong>{{ tasks.length }}</strong><span>全部研究任务</span></div></div>
-      <div class="stat-card success"><CheckCircle2 /><div><strong>{{ successfulTasks }}</strong><span>成功完成</span></div></div>
-      <div class="stat-card danger"><XCircle /><div><strong>{{ failedTasks }}</strong><span>需要关注</span></div></div>
-      <div class="stat-card violet"><BookOpenCheck /><div><strong>{{ currentTask?.artifacts.length || 0 }}</strong><span>当前交付物</span></div></div>
+      <el-popover trigger="click" placement="bottom" :width="370"><template #reference><button class="stat-card"><FlaskConical /><div><strong>{{ tasks.length }}</strong><span>全部研究任务</span></div></button></template><div class="stat-menu"><button v-for="task in tasks" :key="task.task_id" @click="focusTask(task.task_id)">{{ task.goal }} · {{ statusLabel(task.status) }}</button><p v-if="!tasks.length">暂无任务</p></div></el-popover>
+      <el-popover trigger="click" placement="bottom" :width="370"><template #reference><button class="stat-card success"><CheckCircle2 /><div><strong>{{ successfulTasks }}</strong><span>成功完成</span></div></button></template><div class="stat-menu"><button v-for="task in tasks.filter(item => item.status === 'SUCCESS')" :key="task.task_id" @click="focusTask(task.task_id)">{{ task.goal }}</button><p v-if="!successfulTasks">暂无已完成任务</p></div></el-popover>
+      <el-popover trigger="click" placement="bottom" :width="370"><template #reference><button class="stat-card danger"><XCircle /><div><strong>{{ failedTasks }}</strong><span>需要关注</span></div></button></template><div class="stat-menu"><div v-for="task in tasks.filter(item => item.status === 'FAILED')" :key="task.task_id" class="stat-task"><button @click="focusTask(task.task_id)">{{ task.goal }}</button><button class="retry-link" @click="retryTask(task)">重新执行</button></div><p v-if="!failedTasks">暂无失败任务</p></div></el-popover>
+      <el-popover trigger="click" placement="bottom" :width="370"><template #reference><button class="stat-card violet"><BookOpenCheck /><div><strong>{{ currentTask?.artifacts.length || 0 }}</strong><span>当前交付物</span></div></button></template><div class="stat-menu"><button v-for="artifact in currentTask?.artifacts || []" :key="artifact.artifact_id" @click="focusArtifact(artifact.artifact_id)">{{ artifact.title }}</button><p v-if="!currentTask?.artifacts.length">当前任务暂无交付物</p></div></el-popover>
     </section>
 
-    <section class="workspace-grid">
+    <section class="workspace-grid" :class="{ 'history-collapsed': historyCollapsed }">
       <aside class="panel history-panel">
         <div class="panel-heading">
           <div><span>最近</span><h2>历史任务</h2></div>
-          <button class="icon-button" type="button" title="刷新" @click="loadTasks"><RefreshCw :size="17" /></button>
+          <button class="icon-button" type="button" :title="historyCollapsed ? '展开历史任务' : '收起历史任务'" @click="historyCollapsed = !historyCollapsed"><ChevronRight v-if="historyCollapsed" :size="17" /><ChevronLeft v-else :size="17" /></button>
+          <button v-if="!historyCollapsed" class="icon-button" type="button" title="刷新" @click="loadTasks"><RefreshCw :size="17" /></button>
         </div>
 
-        <div v-if="tasks.length === 0" class="empty-state compact">
+        <div v-if="!historyCollapsed && tasks.length === 0" class="empty-state compact">
           <div class="empty-icon"><FileSearch :size="26" /></div>
           <strong>还没有研究记录</strong><span>从上方输入一个研究目标开始</span>
         </div>
         <button
-          v-for="task in tasks"
+          v-for="task in historyCollapsed ? [] : tasks"
           :key="task.task_id"
           type="button"
           class="task-card"
@@ -236,7 +266,7 @@ onMounted(() => {
         </button>
       </aside>
 
-      <section class="panel detail-panel" v-loading="loadingDetail">
+      <section id="research-detail" class="panel detail-panel" v-loading="loadingDetail">
         <div v-if="!currentTask" class="empty-state">
           <div class="empty-icon large"><BrainCircuit :size="34" /></div>
           <strong>选择一个研究任务</strong><span>执行步骤与研究交付物会显示在这里</span>
@@ -247,7 +277,7 @@ onMounted(() => {
               <span class="detail-kicker">TASK {{ currentTask.task_id }}</span>
               <h2>{{ currentTask.goal }}</h2>
             </div>
-            <el-tag :type="statusType(currentTask.status)" size="large" effect="light">{{ statusLabel(currentTask.status) }}</el-tag>
+            <div class="detail-actions"><button v-if="currentTask.status === 'FAILED'" type="button" @click="retryTask(currentTask)">重新执行</button><button v-if="currentTask.status === 'SUCCESS'" type="button" @click="continueFromTask(currentTask)">基于结果继续研究</button><el-tag :type="statusType(currentTask.status)" size="large" effect="light">{{ statusLabel(currentTask.status) }}</el-tag></div>
           </div>
 
           <div class="progress-row">
@@ -259,12 +289,13 @@ onMounted(() => {
           <div v-if="currentTask.artifacts.length === 0" class="empty-artifact">
             当前任务尚未生成研究结果
           </div>
+          <div v-for="artifact in currentTask.artifacts" :id="`artifact-${artifact.artifact_id}`" :key="artifact.artifact_id">
           <ArtifactPanel
-            v-for="artifact in currentTask.artifacts"
             :key="artifact.artifact_id"
             :artifact="artifact"
             class="artifact-item"
           />
+          </div>
 
           <div class="section-title trace-title"><span>02</span><div><h3>执行轨迹</h3><p>查看智能体的规划与运行状态</p></div></div>
           <div class="timeline">
@@ -357,4 +388,15 @@ onMounted(() => {
 .empty-icon { border-radius: 50%; color: #6d5bd0; background: #f2f0f8; }.empty-icon.large { border-radius: 50%; }
 @media (max-width:1050px) { .model-card { margin: 18px auto 0; }.stats-grid { grid-template-columns: repeat(2,1fr); }.stat-card:nth-child(3) { border-left: 0; border-top: 1px solid #e8e8ea; }.stat-card:nth-child(4) { border-top: 1px solid #e8e8ea; }.workspace-grid { grid-template-columns: 1fr; }.detail-panel { grid-row: 1; }.history-panel { grid-row: 2; } }
 @media (max-width:680px) { .research-page { padding: 18px 14px 84px; }.hero-panel { padding: 26px 0 18px; }.hero-copy h1 { font-size: 30px; }.composer-footer { align-items: center; flex-direction: row; }.composer-footer > span { display: none; }.research-button { width: auto; margin-left: auto; }.stats-grid { gap: 0; }.stat-card { min-height: 62px; padding: 12px; }.quick-prompts { justify-content: flex-start; } }
+.stat-card { width: 100%; text-align: left; cursor: pointer; }
+.stat-card:hover { background: #f0edfb; }
+.stat-menu { max-height: 320px; overflow-y: auto; }
+.stat-menu button { display: block; width: 100%; padding: 8px 4px; border-bottom: 1px solid #ececf0; text-align: left; font-size: 12px; }
+.stat-menu button:hover { color: #5e4bc2; background: #f8f6ff; }
+.stat-menu p { color: #8a8a91; font-size: 12px; }
+.stat-task { display: flex; align-items: center; }.stat-task .retry-link { flex: none; width: auto; color: #6d5bd0; white-space: nowrap; }
+.continuation-label { display: flex; align-items: center; gap: 12px; margin: 4px 8px; color: #55489d; font-size: 11px; }.continuation-label button { text-decoration: underline; }
+.detail-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }.detail-actions button { padding: 6px 9px; border: 1px solid #ccc4ed; border-radius: 7px; color: #5e4bc2; background: #f7f5ff; font-size: 11px; }.detail-actions button:hover { background: #ebe6ff; }
+.workspace-grid.history-collapsed { grid-template-columns: 52px minmax(0,1fr); }.history-collapsed .history-panel { padding: 8px; }.history-collapsed .panel-heading > div { display: none; }
+@media(max-width:1050px) { .workspace-grid.history-collapsed { grid-template-columns: 1fr; }.history-collapsed .history-panel { grid-row: 2; } }
 </style>

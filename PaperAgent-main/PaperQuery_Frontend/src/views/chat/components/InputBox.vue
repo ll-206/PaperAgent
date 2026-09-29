@@ -34,13 +34,14 @@
 
 .el-button {
   border-radius: 10px;
-  background-color: #f1eff7;
+  background-color: #e8e1ff;
   --el-button-hover-border-color: #ded9ee;
   --el-button-border-color: #e5e1f0;
   --el-button-disabled-border-color: transparent;
   --el-button-disabled-bg-color: none;
   --el-button-active-border-color: #cec7e5;
 }
+.composer-box :deep(.el-button:hover) { background: #d5c9ff; }
 
 .composer-box { border: 1px solid #e3e3e6; border-radius: 18px; background: #fff; box-shadow: 0 7px 24px rgba(32,32,36,.07); transition: border-color .18s ease, box-shadow .18s ease; }
 .composer-box:focus-within { border-color: #cfc8e7; box-shadow: 0 8px 28px rgba(74,62,137,.10), 0 0 0 3px rgba(109,91,208,.07); }

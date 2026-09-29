@@ -5,11 +5,12 @@ export const createResearchTask = async (
   goal: string,
   mode = 'research',
   documentIds: string[] = [],
+  parentTaskId?: string,
 ) => {
   const token = localStorage.getItem('token')
   const resp = await api.post(
     '/research/tasks',
-    { goal, mode, document_ids: documentIds },
+    { goal, mode, document_ids: documentIds, parent_task_id: parentTaskId },
     {
       headers: { Authorization: `Bearer ${token}` },
       timeout: 180000,

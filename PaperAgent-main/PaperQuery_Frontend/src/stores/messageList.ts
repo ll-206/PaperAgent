@@ -1,8 +1,9 @@
 import { computed, reactive } from 'vue'
 import { defineStore } from 'pinia'
 import { updateMemory } from '@/api/chat'
-import { askQuestionStream, type CitationItem } from '@/api/qa'
+import { askQuestionStream, type CitationItem, type ExternalPaperResult, type SearchProgress } from '@/api/qa'
 import { useChatHistoryStore } from './chatHistory'
+import type { ChatDocumentSnapshot } from './chatHistory'
 import { useDocumentListStore } from './documentList'
 import { useMemoryStore } from './memory'
 import { useModelStore } from './modelStore'
@@ -15,7 +16,12 @@ export type Message = {
   modelLabel?: string
   createdAt?: number
   citations?: CitationItem[]
+  externalPapers?: ExternalPaperResult
+  searchStatus?: string
+  searchState?: SearchProgress['state']
+  searchSteps?: string[]
   status?: 'thinking' | 'streaming' | 'done' | 'error'
+  documents?: ChatDocumentSnapshot[]
 }
 
 export const useMessageListStore = defineStore('messageList', () => {
@@ -26,14 +32,16 @@ export const useMessageListStore = defineStore('messageList', () => {
   const messages = computed(() => state.messageList)
 
   function addUserMessage(message: Message) {
+    const documentStore = useDocumentListStore()
     const userMessage: Message = {
       ...message,
+      documents: documentStore.getSelectedSnapshots(),
       id: state.messageList.length,
       createdAt: Date.now(),
     }
     state.messageList.push(userMessage)
     saveHistorySnapshot()
-    addGptMessage(userMessage.content)
+    addGptMessage(userMessage.content, documentStore.getDocumentIDs())
   }
 
   function addSystemMessage(content: string) {
@@ -46,12 +54,11 @@ export const useMessageListStore = defineStore('messageList', () => {
     saveHistorySnapshot()
   }
 
-  function addGptMessage(question: string) {
+  function addGptMessage(question: string, ids: string[]) {
     const modelStore = useModelStore()
     const model = modelStore.currentModel
     const modelLabel = modelStore.getModelLabel(model)
     const newId = state.messageList.length
-    const ids = useDocumentListStore().getDocumentIDs() as Array<string>
     const memory = useMemoryStore().getMemory
     let answer = ''
     let citations: CitationItem[] = []
@@ -94,6 +101,22 @@ export const useMessageListStore = defineStore('messageList', () => {
       },
       (cits) => {
         citations = cits
+      },
+      (progress) => {
+        if (state.messageList[newId]) {
+          const message = state.messageList[newId]
+          message.searchStatus = progress.text
+          message.searchState = progress.state
+          if (progress.text && !message.searchSteps?.includes(progress.text)) {
+            message.searchSteps = [...(message.searchSteps || []), progress.text]
+          }
+        }
+      },
+      (result) => {
+        if (state.messageList[newId]) {
+          state.messageList[newId].externalPapers = result
+        }
+        saveHistorySnapshot()
       },
     )
       .then(() => {
@@ -146,11 +169,12 @@ export const useMessageListStore = defineStore('messageList', () => {
   function clearMessages() {
     state.messageList = []
     useMemoryStore().clearMemory()
+    useDocumentListStore().clearDocuments()
     useChatHistoryStore().startNewSession()
   }
 
   function restoreMessages(messagesToRestore: Message[], memory = '') {
-    state.messageList = messagesToRestore.map((message, index) => ({
+    state.messageList = messagesToRestore.filter(message => message.role === 'user' || message.role === 'gpt').map((message, index) => ({
       ...message,
       id: index,
     }))
@@ -167,7 +191,8 @@ export const useMessageListStore = defineStore('messageList', () => {
       memory: useMemoryStore().getMemory,
       summary: useMemoryStore().getMemory,
       documents: useDocumentListStore().getDocumentSnapshots(),
-      messages: state.messageList,
+      selectedDocumentIDs: useDocumentListStore().getDocumentIDs(),
+      messages: state.messageList.filter(message => message.role === 'user' || message.role === 'gpt'),
     })
   }
 

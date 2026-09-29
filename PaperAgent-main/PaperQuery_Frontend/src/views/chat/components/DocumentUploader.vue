@@ -1,8 +1,8 @@
 <template>
   <div>
-    <el-button circle title="添加论文" @click="openDialog">
+    <el-button circle class="upload-trigger" title="添加论文" @click="openDialog">
       <IconoirProvider
-        :icon-props="{ color: '#000000', 'stroke-width': 1.5, width: '2em', height: '2em' }"
+        :icon-props="{ color: '#ffffff', 'stroke-width': 2, width: '2em', height: '2em' }"
       >
         <PlusCircle />
       </IconoirProvider>
@@ -246,8 +246,8 @@ async function confirmSelection() {
 
 <style lang="less" scoped>
 .el-button {
-  background-color: #f4f4f4;
-  --el-button-hover-border-color: #f4f4f4;
-  --el-button-border-color: #f4f4f4;
+  --el-button-hover-border-color: #5e4bc2;
 }
+.upload-trigger { width: 44px; height: 44px; border: 1px solid #5e4bc2; background: #6d5bd0; box-shadow: 0 2px 8px rgba(109,91,208,.22); }
+.upload-trigger:hover { background: #5744bf; box-shadow: 0 3px 12px rgba(109,91,208,.38); }
 </style>

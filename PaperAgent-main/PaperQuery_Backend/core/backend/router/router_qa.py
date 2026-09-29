@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 
@@ -12,14 +13,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from core.backend.db.models import Document, TMPDocument
+from core.backend.db.models import ActivityEvent, Document, TMPDocument
 from core.backend.router.dependencies import get_db
 from core.backend.utils.utils import get_current_user
 from core.backend.router.req_res_schema import QARequest
 from core.decision.engine import DecisionEngine
+from core.decision.external_search import (
+    classify_external_request,
+    make_research_prompt,
+    make_search_keywords,
+    normalize_papers,
+)
 from core.decision.prompts import ANSWER_PROMPT, GENERAL_CHAT_PROMPT
-from core.decision.schemas import IntentType
+from core.decision.schemas import EvidenceDecision, IntentType
 from core.evidence.formatter import build_citations, format_evidence
+from core.skills.paper_search import PaperSearchSkill
 
 router = APIRouter()
 
@@ -63,6 +71,10 @@ def qa_stream(
         if not selected_ids.issubset(owned_ids):
             raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
 
+    # Count submitted Ask requests for this account. The event contains no question text.
+    db.add(ActivityEvent(lid=user.lid, event_type="ask"))
+    db.commit()
+
     trace_id = uuid.uuid4().hex[:12]
     agent = getattr(request.app, "chat_agents", {}).get(qa.model)
     if agent is None:
@@ -76,8 +88,15 @@ def qa_stream(
 
     def generate():
         # 1. Intent 判断
+        external_kind = classify_external_request(qa.question)
         intent = None
-        if decision_engine is not None:
+        if external_kind:
+            yield _sse("meta", {
+                "trace_id": trace_id,
+                "route": "EXTERNAL_RESEARCH",
+                "intent": IntentType.RESEARCH_TASK.value,
+            })
+        elif decision_engine is not None:
             intent = decision_engine.decide_intent(qa.question, qa.conversation_context)
             route = "GENERAL_CHAT" if intent.intent == IntentType.GENERAL_CHAT else "LOCAL_RAG"
             yield _sse("meta", {
@@ -133,17 +152,78 @@ def qa_stream(
 
         # 4. Evidence Judge
         if decision_engine is not None:
-            ev = decision_engine.decide_evidence(qa.question, evidence_text)
+            ev = (
+                EvidenceDecision(decision="SEARCH_EXTERNAL", confidence=1.0, evidence_score=0.0)
+                if external_kind
+                else decision_engine.decide_evidence(qa.question, evidence_text)
+            )
+            search_external = ev.decision == "SEARCH_EXTERNAL"
             yield _sse("decision", {
-                "decision": ev.decision,
+                "decision": "SEARCH_EXTERNAL" if search_external else ev.decision,
                 "evidence_score": ev.evidence_score,
                 "confidence": ev.confidence,
             })
-            if ev.decision in ("ABSTAIN", "SEARCH_EXTERNAL"):
-                msg = "当前本地证据不足，无法可靠回答。"
-                if ev.decision == "SEARCH_EXTERNAL":
-                    msg += "建议通过外部学术搜索补充相关论文。"
-                yield _sse("delta", {"text": msg})
+            if search_external:
+                yield _sse("search_status", {"state": "preparing", "text": "正在结合所选论文和目标领域提取检索词…"})
+                keywords = (
+                    make_search_keywords(
+                        decision_engine.llm,
+                        qa.question,
+                        evidence_text,
+                        kind=external_kind or "literature",
+                    )
+                    if not ev.search_keywords
+                    else ev.search_keywords[:3]
+                )
+                yield _sse("search_status", {
+                    "state": "searching",
+                    "text": "正在检索 arXiv / OpenAlex：" + "、".join(keywords),
+                })
+                result = asyncio.run(PaperSearchSkill().run(
+                    {"keywords": keywords, "max_results": 8}
+                ))
+                papers = normalize_papers(result.output.get("papers", [])) if result.ok else []
+                yield _sse("external_papers", {
+                    "items": papers,
+                    "keywords": keywords,
+                    "provider": result.output.get("provider", "") if result.ok else "",
+                    "warning": result.output.get("warning", "") if result.ok else result.error_message,
+                })
+                if papers:
+                    yield _sse("search_status", {
+                        "state": "answering",
+                        "text": f"从 {result.output.get('provider', '学术来源')} 找到 {len(papers)} 篇论文，正在对照摘要整理建议…",
+                    })
+                    if agent is not None:
+                        prompt = make_research_prompt(
+                            qa.question, evidence_text, papers, kind=external_kind or "literature"
+                        )
+                        try:
+                            for text in _stream_model_text(agent, prompt):
+                                yield _sse("delta", {"text": text})
+                        except Exception:
+                            yield _sse("delta", {"text": "已找到相关论文，请先查看下方题目和摘要，再选择需要核查的 PDF。"})
+                    else:
+                        yield _sse("delta", {"text": "已找到相关论文，请查看下方结果并选择需要进一步阅读的 PDF。"})
+                else:
+                    yield _sse("delta", {"text": "已尝试外部学术搜索，但目前未取得可展示的论文结果。请调整研究领域或关键词后重试。"})
+                yield _sse("search_status", {"state": "done", "text": "外部学术检索已完成"})
+                yield _sse("grounding", {"passed": False, "confidence": ev.confidence, "reason": "EXTERNAL_METADATA_ONLY"})
+                yield _sse("citations", {
+                    "items": [
+                        {
+                            "id": c.citation_id,
+                            "documentID": c.document_id,
+                            "knowledgeID": c.knowledge_id,
+                            "page": c.page_number,
+                            "chunk_id": c.chunk_id,
+                        }
+                        for c in build_citations(citation_map)
+                    ]
+                })
+                return
+            if ev.decision == "ABSTAIN":
+                yield _sse("delta", {"text": "当前所选论文没有足够证据回答该问题。"})
                 yield _sse("grounding", {"passed": False, "confidence": ev.confidence})
                 return
 

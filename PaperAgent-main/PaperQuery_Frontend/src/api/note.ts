@@ -23,7 +23,7 @@ export const getDocumentNote = async (
         })
         return resp.data
     } catch (e: any) {
-        throw new Error(e.response.data.msg)
+        throw new Error(e.response?.data?.detail || e.response?.data?.msg || e.message || '读取笔记失败')
     }
 }
 
@@ -49,6 +49,6 @@ export const updateDocumentNote = async (
         })
         return resp.data
     } catch (e: any) {
-        throw new Error(e.response.data.msg)
+        throw new Error(e.response?.data?.detail || e.response?.data?.msg || e.message || '保存笔记失败')
     }
 }

@@ -1,11 +1,17 @@
+import asyncio
 import hashlib
+from io import BytesIO
 import os
-from datetime import datetime as DateTime, timezone
-from fastapi import APIRouter, Depends, File, Form, Path, Request, UploadFile, status
+import re
+from urllib.parse import urljoin, urlsplit
+from datetime import timezone
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+import requests
 
 from core.agent.chatAgent import *
 from core.agent.dataprocessAgent import *
@@ -19,9 +25,69 @@ from core.backend.schema.noteschema import NoteCreate, NoteDelete
 from core.backend.schema.schema import *
 from core.backend.utils.utils import get_current_user, get_db, get_document_tags, get_filtered_documents, vector_paper_for_tmp
 from core.vectordb.chromadb import *
+from datetime import datetime as PythonDateTime  # import after wildcard imports to avoid DateTime shadowing
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 router = APIRouter()
+
+
+class ExternalPaperImport(BaseModel):
+    pdf_url: str
+    knowledgeID: str
+    title: str | None = None
+
+
+def _allowed_arxiv_pdf(url: str) -> bool:
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.hostname in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}
+        and port in (None, 443)
+        and not parsed.username
+        and parsed.path.startswith("/pdf/")
+    )
+
+
+def _download_arxiv_pdf(url: str) -> tuple[bytes, str]:
+    """Fetch a user-selected arXiv PDF without allowing arbitrary server URLs."""
+    if not _allowed_arxiv_pdf(url):
+        raise HTTPException(status_code=400, detail="当前仅支持直接导入 arXiv PDF；其他论文请下载后手动上传")
+    current = url
+    max_bytes = int(os.getenv("MAX_UPLOAD_MB", "25")) * 1024 * 1024
+    for _ in range(4):
+        try:
+            response = requests.get(current, stream=True, allow_redirects=False, timeout=(8, 35))
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail="论文 PDF 下载失败，请稍后重试") from exc
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = response.headers.get("Location", "")
+            response.close()
+            current = urljoin(current, location)
+            if not _allowed_arxiv_pdf(current):
+                raise HTTPException(status_code=502, detail="论文下载跳转到了不支持的地址")
+            continue
+        try:
+            response.raise_for_status()
+            content = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                content.extend(chunk)
+                if len(content) > max_bytes:
+                    raise HTTPException(status_code=413, detail="论文 PDF 超过上传大小限制")
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail="论文 PDF 下载失败，请稍后重试") from exc
+        finally:
+            response.close()
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=502, detail="下载结果不是有效 PDF，请打开原文链接查看")
+        filename = urlsplit(current).path.rsplit("/", 1)[-1]
+        if not filename.lower().endswith(".pdf"):
+            filename += ".pdf"
+        return bytes(content), filename
+    raise HTTPException(status_code=502, detail="论文 PDF 跳转次数过多")
 
 @router.get("/document/getDocumentList")
 async def get_documents_all(knowledgeID:str, token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
@@ -126,7 +192,7 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     user = await get_current_user(token,db)
-    createtime = DateTime.now(timezone.utc)
+    createtime = PythonDateTime.now(timezone.utc)
     if addToLibrary:
         if not knowledgeID:
             return JSONResponse(
@@ -226,6 +292,37 @@ async def upload_document(
     }
 
 
+@router.post("/document/import_external")
+async def import_external_paper(
+    payload: ExternalPaperImport,
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    """Add a chosen search result to an owned Library using the upload path."""
+    user = await get_current_user(token, db)
+    owned = db.query(Knowledge).filter(
+        Knowledge.knowledgeID == payload.knowledgeID,
+        Knowledge.lid == user.lid,
+    ).first()
+    if owned is None:
+        raise HTTPException(status_code=404, detail="目标知识库不存在")
+    content, filename = await asyncio.to_thread(_download_arxiv_pdf, payload.pdf_url)
+    if payload.title:
+        title = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', payload.title).strip(' .')[:120]
+        if title:
+            filename = f"{title}.pdf"
+    upload = UploadFile(file=BytesIO(content), filename=filename)
+    return await upload_document(
+        request=request,
+        documentFile=upload,
+        addToLibrary=True,
+        knowledgeID=payload.knowledgeID,
+        token=token,
+        db=db,
+    )
+
+
 ## 单文件上传
 @router.post("/document/upload")
 async def upload_library_document(
@@ -274,7 +371,7 @@ async def upload_library_document(
     uid=cal_file_md5(file_path)
 
     print("UID",uid)
-    createtime=DateTime.now(timezone.utc)
+    createtime=PythonDateTime.now(timezone.utc)
     document = DocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/pdf/",stored_name),documentStatus=0,uid=uid,knowledgeID=knowledgeID,lid=user.lid,createTime=createtime)
     ### 增加创建笔记
     addnotedata=NoteCreate(

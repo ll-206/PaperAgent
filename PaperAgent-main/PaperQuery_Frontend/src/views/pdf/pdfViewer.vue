@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { VuePDF, usePDF } from '@tato30/vue-pdf'
 import '@tato30/vue-pdf/style.css'
-import FloatingButton from '@/views/smallChat/floatButton.vue'
 import { useStore } from 'vuex'
-import { useScroll } from '@vueuse/core'
 import { translateText } from '@/api/data'
-import { debounce } from 'lodash'
 import Button from '@/components/ui/button/Button.vue'
-import Input from '@/components/ui/input/Input.vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   knowledgeID: {
@@ -20,6 +18,8 @@ const props = defineProps({
   },
 })
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const emit = defineEmits<{ selection: [text: string, page: number]; loaded: [] }>()
+const route = useRoute()
 
 // 手动 fetch 带鉴权头获取 PDF，避免 usePDF 直连 URL 因缺少 token 返回 401 导致左侧空白
 const pdfUrl = ref<string | null>(null)
@@ -34,148 +34,101 @@ async function loadPdf() {
     )
     if (!resp.ok) throw new Error(`PDF 加载失败 (HTTP ${resp.status})`)
     const blob = await resp.blob()
+    if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value)
     pdfUrl.value = URL.createObjectURL(blob)
   } catch (error: any) {
-    console.error('PDF 加载失败:', error)
+    ElMessage.error(error?.message || 'PDF 加载失败')
   }
 }
 
-loadPdf()
 const store = useStore()
-
-// 用户选中文本
-const selectedText = ref('')
-
-// 是否显示浮动按钮
-const isFloatingButtonVisible = ref(true)
-
-// 当前页码
 const page = ref(1)
+const container = ref<HTMLElement | null>(null)
+const translating = ref(false)
+let selectionVersion = 0
 
-// 监听容器的滚动状态
-const container = ref(null)
-const { y, arrivedState } = useScroll(container)
-
-// 判断是否已经到达底部 防止一次滚动就换页
-const bottomReachedOnce = ref(false)
-const topReachedOnce = ref(false)
-
-// 滚动事件 防抖处理 防止滚动过快一次换多页
-const handleWheel = debounce((event: any) => {
-  if (event.deltaY > 0 && arrivedState.bottom) {
-    if (bottomReachedOnce.value) {
-      page.value = Math.min(page.value + 1, pages.value)
-      y.value = 0
-    } else {
-      bottomReachedOnce.value = true
-    }
-  } else if (event.deltaY < 0 && arrivedState.top) {
-    if (topReachedOnce.value) {
-      page.value = Math.max(page.value - 1, 1)
-      y.value = 0
-    } else {
-      topReachedOnce.value = true
-    }
-  }
-}, 300)
-
-// 监听滚动状态 重置底部和顶部状态
-watch(arrivedState, (newValue) => {
-  if (!newValue.bottom) {
-    bottomReachedOnce.value = false
-  }
-  if (!newValue.top) {
-    topReachedOnce.value = false
-  }
-})
-
-// 发送翻译请求
-const getSelectedText = async () => {
-  const selection = window.getSelection()
-  if (selection && selection.toString().length > 0) {
-    let text = selection.toString()
-    selectedText.value = text
-    try {
-      const res = await translateText(text)
-      if (res) {
-        text = res.data.text
-      }
-    } catch (error) {
-      console.error('翻译失败:', error)
-    } finally {
-      store.dispatch('updateTranslatedText', text)
-    }
-  }
+const jumpToPage = (target: number) => {
+  const valid = Math.max(1, Math.min(target, pages.value || 1))
+  page.value = valid
+  container.value?.querySelector<HTMLElement>(`[data-pdf-page="${valid}"]`)?.scrollIntoView({ block: 'start' })
 }
 
-const handleMouseUp = () => {
-  getSelectedText()
+const updateCurrentPage = () => {
+  if (!container.value) return
+  const top = container.value.getBoundingClientRect().top
+  const visible = [...container.value.querySelectorAll<HTMLElement>('[data-pdf-page]')]
+    .find((element) => element.getBoundingClientRect().bottom > top + 40)
+  if (visible) page.value = Number(visible.dataset.pdfPage)
+}
+
+const handleMouseUp = async () => {
+  const selection = window.getSelection()
+  const text = selection?.toString().trim() || ''
+  if (!text || !container.value?.contains(selection?.anchorNode)) return
+  const pageElement = (selection?.anchorNode instanceof Element
+    ? selection.anchorNode : selection?.anchorNode?.parentElement)?.closest<HTMLElement>('[data-pdf-page]')
+  const selectedPage = Number(pageElement?.dataset.pdfPage || page.value)
+  emit('selection', text, selectedPage)
+  store.commit('setSelectedText', text)
+  store.commit('setTranslatedText', '正在使用本地模型翻译…')
+  const version = ++selectionVersion
+  translating.value = true
+  try {
+    const response = await translateText(text)
+    if (version === selectionVersion) store.commit('setTranslatedText', response.data.text)
+  } catch (error: any) {
+    if (version === selectionVersion) store.commit('setTranslatedText', `翻译失败：${error?.message || '本地模型不可用'}`)
+  } finally {
+    translating.value = false
+  }
 }
 
 onMounted(() => {
-  const div1 = document.getElementById('div1')
-  if (div1) {
-    div1.addEventListener('mouseup', handleMouseUp)
-    div1.addEventListener('wheel', handleWheel, { passive: true })
-  }
+  loadPdf()
 })
 
 onBeforeUnmount(() => {
-  const div1 = document.getElementById('div1')
-  if (div1) {
-    div1.removeEventListener('mouseup', handleMouseUp)
-    div1.removeEventListener('wheel', handleWheel)
-  }
+  selectionVersion++
   if (pdfUrl.value) {
     URL.revokeObjectURL(pdfUrl.value)
   }
 })
 
-const handleButtonLastPage = () => {
-  page.value = Math.max(page.value - 1, 1)
-  y.value = 0
-}
-
-const handleButtonNextPage = () => {
-  page.value = Math.min(page.value + 1, pages.value)
-  y.value = 0
-}
+watch(pages, async (count) => {
+  if (!count) return
+  emit('loaded')
+  await nextTick()
+  jumpToPage(Number(route.query.page) || 1)
+})
+watch(() => route.query.page, async (value) => {
+  if (!pages.value) return
+  await nextTick()
+  jumpToPage(Number(value) || 1)
+})
 </script>
 
 <template>
-  <div class="flex flex-row w-full">
-    <div class="flex items-center justify-center w-full">
-      <Button variant="ghost" @click="handleButtonLastPage">《</Button>
-      <Input class="w-10 h-5 text-sm font-bold" :value="`${page}`" />
-      <Button variant="ghost" @click="handleButtonNextPage">》</Button>
+  <div class="reader">
+    <div class="reader-toolbar">
+      <Button variant="ghost" :disabled="page <= 1" @click="jumpToPage(page - 1)">上一页</Button>
+      <span>第 {{ page }} / {{ pages || '…' }} 页</span>
+      <Button variant="ghost" :disabled="page >= pages" @click="jumpToPage(page + 1)">下一页</Button>
+      <span class="reader-hint">在左侧连续滚动阅读；选中文字可离线翻译并用于提问</span>
+    </div>
+    <div ref="container" class="pdf-container" @scroll.passive="updateCurrentPage" @mouseup="handleMouseUp">
+      <div v-for="pageNumber in pages" :key="pageNumber" :data-pdf-page="pageNumber" class="pdf-page">
+        <VuePDF :pdf="pdf" :page="pageNumber" text-layer fit-parent />
+        <span class="page-label">{{ pageNumber }} / {{ pages }}</span>
+      </div>
     </div>
   </div>
-
-  <div id="div1" ref="container" class="pdf-container">
-    <VuePDF :pdf="pdf" :page="page" text-layer fit-parent />
-    <!-- <div class="flex items-center justify-center mb-10 w-full"></div> -->
-  </div>
-  <FloatingButton
-    :is-visible="isFloatingButtonVisible"
-    :selected-text="selectedText"
-    :knowledge-i-d="knowledgeID"
-    :document-i-d="documentID"
-    :page="page"
-  />
 </template>
 
 <style scoped>
-.pdf-page {
-  width: 100%;
-  margin-bottom: 0; /* Add spacing to avoid overlap */
-}
-
-.pdf-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow-y: auto;
-  overflow-x: auto;
-  max-height: 100vh;
-}
+.reader { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+.reader-toolbar { flex: none; display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
+.reader-hint { margin-left: 16px; color: #6b7280; font-size: 12px; }
+.pdf-container { flex: 1; min-height: 0; overflow: auto; padding: 16px 24px 32px; background: #e9edf3; scroll-behavior: smooth; }
+.pdf-page { position: relative; width: min(100%, 1050px); margin: 0 auto 16px; background: white; box-shadow: 0 2px 10px #1f29371f; scroll-margin-top: 12px; }
+.page-label { display: block; padding: 5px; text-align: center; color: #6b7280; font-size: 12px; }
 </style>

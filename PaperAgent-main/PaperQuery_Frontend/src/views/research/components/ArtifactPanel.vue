@@ -114,6 +114,7 @@ const formatAuthors = (authors: unknown) => {
           <div class="paper-meta">
             <span><Users :size="12" /> {{ formatAuthors(paper.authors) }}</span>
             <span v-if="paper.published"><CalendarDays :size="12" /> {{ paper.published }}</span>
+            <span>来源：{{ paper.venue || (paper.provider === 'arxiv' ? 'arXiv 预印本' : '来源未注明') }}<template v-if="paper.source_type"> · {{ paper.source_type }}</template></span>
           </div>
           <p v-if="paper.summary">{{ paper.summary }}</p>
         </div>

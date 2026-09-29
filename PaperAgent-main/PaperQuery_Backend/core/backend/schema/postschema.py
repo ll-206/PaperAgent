@@ -4,10 +4,12 @@ import datetime
 class PostCreateRequest(BaseModel):
     title:str
     content:str
+    category:str = '技术'
 class PostResponse(BaseModel):
     lid:str
     postid:str
     title:str
+    category:str
     content:str
     username:str
     publishtime_timestamp:int
@@ -19,6 +21,7 @@ class PostCreate(BaseModel):
     lid:str
     postid:str
     title:str
+    category:str
     content:str
     username:str
     publishtime:datetime.datetime

@@ -70,22 +70,23 @@ const routes: Array<RouteRecordRaw> = [
         path: 'Note',
         component: () => import('@/views/note/note.vue'),
       },
-      {
-        path: 'Forum',
-        name: 'forum',
-        component: () => import('@/views/forum/forum.vue'),
-        children: [
-          {
-            path: 'threadDetail/:postid',
-            name: 'threadDetail',
-            component: () => import('@/views/forum/components/threadDetail.vue'),
-          },
-          {
-            path: 'threads',
-            component: () => import('@/views/forum/components/threads.vue'),
-          }
-        ],
-      }
+      // 论坛模块已隐藏 - 恢复时取消此注释即可
+      // {
+      //   path: 'Forum',
+      //   name: 'forum',
+      //   component: () => import('@/views/forum/forum.vue'),
+      //   children: [
+      //     {
+      //       path: 'threadDetail/:postid',
+      //       name: 'threadDetail',
+      //       component: () => import('@/views/forum/components/threadDetail.vue'),
+      //     },
+      //     {
+      //       path: 'threads',
+      //       component: () => import('@/views/forum/components/threads.vue'),
+      //     }
+      //   ],
+      // }
     ],
   },
   // 知识页面

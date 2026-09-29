@@ -27,9 +27,10 @@ export const sidebarItems : SidebarItem[] = [
     link: '/home/research',
     icon: FlaskConical,
   },
-  {
-    title: '论坛',
-    link: '/home/forum/threads',
-    icon: UsersRound,
-  },
+  // 论坛模块已隐藏 - 恢复时取消此注释即可
+  // {
+  //   title: '论坛',
+  //   link: '/home/forum/threads',
+  //   icon: UsersRound,
+  // },
 ]

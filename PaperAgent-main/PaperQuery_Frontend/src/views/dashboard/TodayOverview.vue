@@ -59,6 +59,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer))
           <p v-if="!data.uploadedPapers.length" class="muted">今天还没有上传论文。</p>
           <button v-for="item in data.uploadedPapers" :key="`${item.knowledgeID}:${item.documentID}`" class="row" @click="openPaper(item.knowledgeID, item.documentID)"><strong>{{ item.documentName }}</strong><span>{{ item.knowledgeName }} · {{ item.topic }}</span></button>
         </section>
+        <!-- 论坛模块已隐藏 - 恢复时取消此注释即可
         <section class="panel"><header><h3>今日发帖</h3><button @click="router.push('/home/forum/threads')">进入论坛 →</button></header>
           <p v-if="!data.myPosts.length" class="muted">今天还没有发帖。</p>
           <button v-for="post in data.myPosts" :key="post.postID" class="row" @click="openPost(post.postID)"><strong>{{ post.title }}</strong><span>{{ formatTime(post.published) }}</span></button>
@@ -67,6 +68,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer))
           <p v-if="!data.newPosts.length" class="muted">暂无新帖。</p>
           <button v-for="post in data.newPosts" :key="post.postID" class="row" @click="openPost(post.postID)"><strong>{{ post.title }}</strong><span>{{ post.author }} · {{ formatTime(post.published) }}</span></button>
         </section>
+        -->
       </div>
     </template>
   </main>

@@ -33,6 +33,16 @@ export const useDocumentListStore = defineStore('documentList', () => {
     state.documentList.splice(index, 1)
   }
 
+  // 按文档 ID 移除（用于知识库删除文档后，同步清理对话页绑定的残留文档）
+  function deleteDocumentById(documentID: string) {
+    const index = state.documentList.findIndex(item => item.documentID === documentID)
+    if (index !== -1) {
+      state.documentList.splice(index, 1)
+      return true
+    }
+    return false
+  }
+
   function getDocumentIDs() {
     return state.documentList
       .map(value => value.documentID)
@@ -57,5 +67,6 @@ export const useDocumentListStore = defineStore('documentList', () => {
     getDocumentList,
     appendDocument,
     deleteDocument,
+    deleteDocumentById,
   }
 })

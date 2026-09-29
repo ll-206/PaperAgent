@@ -444,7 +444,9 @@ const router_chat = async (card: Knowledge) => {
         store.appendDocument({
           isLoading: false,
           documentID: doc.documentID,
-          documentFile: new File([], doc.documentName),
+          documentName: doc.documentName,
+          knowledgeID: card.knowledgeID,
+          source: 'library',
         })
         bound += 1
       }

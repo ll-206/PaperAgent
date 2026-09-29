@@ -1,6 +1,10 @@
+import logging
+
 from langchain_chroma import Chroma
 
 from core.common.types import EvidenceChunk
+
+logger = logging.getLogger(__name__)
 
 
 # 提供对向量数据库的操作
@@ -12,7 +16,14 @@ class AcadeChroma:
         self.current_layer2_count=self.chroma_db_layer2._collection.count()
     # 增
     def add_paper_to_layer1(self,texts,metadatas):
-        self.chroma_db_layer1.add_texts(texts, metadatas)
+        # 分批写入：一次性 embedding 整篇论文会让 ONNX 内存瞬间暴涨，
+        # Windows 可能直接杀掉 Worker 进程。改为每批 64 个文本块循环写入。
+        BATCH = 64
+        for i in range(0, len(texts), BATCH):
+            self.chroma_db_layer1.add_texts(
+                texts[i:i+BATCH],
+                metadatas[i:i+BATCH],
+            )
         self.current_layer1_count=self.chroma_db_layer1._collection.count()
     
     def add_paper_to_layer2(self,texts,metadatas):
@@ -65,15 +76,42 @@ class AcadeChroma:
 
     
     # 删除指定 kid下的文档
+    # 注意：0xC0000005 这类原生 segfault 无法被 try/except 捕获。因此这里先
+    # 用 _collection.count() 探测索引是否可访问——若索引已损坏/不可用，直接跳过
+    # 删除，而不是对异常索引执行 get(where) 过滤触发 hnswlib 底层崩溃。
     def delete_paper_from_layer1(self,kid,documentid):
-        filterDocs=self.chroma_db_layer1.get(where={"$and":[{"knowledge_name":kid},{"documentID":documentid}]},include=["metadatas"])
-        if len(filterDocs["ids"])>0:
-            self.chroma_db_layer1.delete(filterDocs['ids'])
+        if self.chroma_db_layer1 is None:
+            return
+        try:
+            # 探测索引可读性，异常则放弃删除（防止原生崩溃）
+            try:
+                self.chroma_db_layer1._collection.count()
+            except Exception:
+                logger.warning("delete_paper_from_layer1: layer1 索引不可用，跳过 (kid=%s, doc=%s)", kid, documentid)
+                return
+            filterDocs=self.chroma_db_layer1.get(where={"$and":[{"knowledge_name":kid},{"documentID":documentid}]},include=["metadatas"])
+            ids = (filterDocs or {}).get("ids") or []
+            if len(ids)>0:
+                self.chroma_db_layer1.delete(ids)
+        except Exception as e:
+            logger.warning("delete_paper_from_layer1 failed (kid=%s, doc=%s): %s", kid, documentid, e)
 
     def delete_paper_from_layer2(self,kid,documentid):
-        filterDocs=self.chroma_db_layer2.get(where={"$and":[{"knowledgeID":kid},{"documentID":documentid}]},include=["metadatas"])
-        if len(filterDocs["ids"])>0:
-            self.chroma_db_layer2.delete(filterDocs['ids'])
+        if self.chroma_db_layer2 is None:
+            return
+        try:
+            # 探测索引可读性，异常则放弃删除（防止原生崩溃）
+            try:
+                self.chroma_db_layer2._collection.count()
+            except Exception:
+                logger.warning("delete_paper_from_layer2: layer2 索引不可用，跳过 (kid=%s, doc=%s)", kid, documentid)
+                return
+            filterDocs=self.chroma_db_layer2.get(where={"$and":[{"knowledgeID":kid},{"documentID":documentid}]},include=["metadatas"])
+            ids = (filterDocs or {}).get("ids") or []
+            if len(ids)>0:
+                self.chroma_db_layer2.delete(ids)
+        except Exception as e:
+            logger.warning("delete_paper_from_layer2 failed (kid=%s, doc=%s): %s", kid, documentid, e)
     # 改
     def alter_paper_from_layer1(self,ids,text):
         pass 

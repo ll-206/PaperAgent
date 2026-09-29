@@ -1,5 +1,6 @@
 // 文件名格式化函数
-export const formatName = (fileName: string) => {
+export const formatName = (fileName: string | undefined | null) => {
+  if (!fileName) return ''
   fileName = fileName.slice(0, fileName.indexOf(".pdf"));
   const maxLength = 10;
   let truncated = "";

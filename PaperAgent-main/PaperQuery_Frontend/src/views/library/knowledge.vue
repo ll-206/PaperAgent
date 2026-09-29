@@ -13,6 +13,7 @@ import {
   deleteDocument,
 } from '@/api/data'
 import { useRoute } from 'vue-router'
+import { useDocumentListStore } from '@/stores/documentList'
 import { type Document } from '@/types/type'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
@@ -112,6 +113,8 @@ const handleDelete = async (index: number, row: Document) => {
       })
       // 删除该行数据
       tableData.value.splice(index, 1)
+      // 同步移除对话页已绑定的该文档，避免残留 ID 仍在 Chat 会话中显示
+      useDocumentListStore().deleteDocumentById(row.documentID)
       console.log(index)
     }
   } catch (error: any) {

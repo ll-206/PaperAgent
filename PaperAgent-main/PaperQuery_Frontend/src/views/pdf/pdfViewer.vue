@@ -21,9 +21,26 @@ const props = defineProps({
 })
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
-const { pdf, pages } = usePDF(
-  `${apiBaseUrl}/document/getFile?documentID=${props.documentID}&knowledgeID=${props.knowledgeID}`,
-)
+// 手动 fetch 带鉴权头获取 PDF，避免 usePDF 直连 URL 因缺少 token 返回 401 导致左侧空白
+const pdfUrl = ref<string | null>(null)
+const { pdf, pages } = usePDF(pdfUrl)
+
+async function loadPdf() {
+  try {
+    const token = localStorage.getItem('token')
+    const resp = await fetch(
+      `${apiBaseUrl}/document/getFile?documentID=${props.documentID}&knowledgeID=${props.knowledgeID}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    )
+    if (!resp.ok) throw new Error(`PDF 加载失败 (HTTP ${resp.status})`)
+    const blob = await resp.blob()
+    pdfUrl.value = URL.createObjectURL(blob)
+  } catch (error: any) {
+    console.error('PDF 加载失败:', error)
+  }
+}
+
+loadPdf()
 const store = useStore()
 
 // 用户选中文本
@@ -108,6 +125,9 @@ onBeforeUnmount(() => {
   if (div1) {
     div1.removeEventListener('mouseup', handleMouseUp)
     div1.removeEventListener('wheel', handleWheel)
+  }
+  if (pdfUrl.value) {
+    URL.revokeObjectURL(pdfUrl.value)
   }
 })
 

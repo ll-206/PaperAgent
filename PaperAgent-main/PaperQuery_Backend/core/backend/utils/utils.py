@@ -11,6 +11,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from core.backend.crud.crud_user import query_user
+from core.backend.db.models import Team, TeamMember
 from core.backend.router.dependencies import *
 
 from core.utils.util import cal_file_md5, check_and_parse_json, split_text_into_chunks
@@ -44,6 +45,28 @@ def generate_future_timestamp(minutes: int):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
+
+def get_workspace_lid(db, user) -> str:
+    """返回用户的有效工作空间 lid：
+    - 管理员（默认团队 owner）→ 自己的 lid
+    - 已加入团队的成员       → 该团队 owner 的 lid（共享管理员的）
+    - 其他（未入团）         → 自己的 lid（个人空间，行为不变）
+    """
+    # 1) 查该用户是否作为成员加入某团队
+    member = db.query(TeamMember).filter(TeamMember.member_username == user.username).first()
+    if member:
+        team = db.query(Team).filter(Team.team_id == member.team_id).first()
+        if team:
+            return team.team_id  # 共享管理员 lid
+    # 2) 管理员/未入团用户：自己的 lid 即工作空间
+    return user.lid
+
+
+def attach_workspace_lid(db, user):
+    """把解析出的有效工作空间挂到 user 对象上，供所有资源路由复用（避免各处遗漏）"""
+    user.workspace_lid = get_workspace_lid(db, user)
+    return user
+
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,7 +81,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],db: Ses
     user = query_user(db, username=username)
     if user is None:
         raise credentials_exception
-    return user
+    return attach_workspace_lid(db, user)
 
 
 def get_document_tags(doc):

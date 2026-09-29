@@ -22,6 +22,34 @@ class User(Base):
     username = Column(String(50), nullable=False)  # 最多50个字符的变长字符串，不允许为空
     password = Column(String(255), nullable=False)  # 最多255个字符的变长字符串，不允许为空
     lid = Column(Text, nullable=False)  # 文本类型，不允许为空
+    role = Column(String(16), nullable=False, default='user', server_default='user')  # 'admin' | 'user'，决定是否有团队管理权限
+
+# 团队表：一个管理员对应一个团队，team_id 直接复用管理员(owner)的 lid
+class Team(Base):
+    __tablename__ = 'teams'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(String(255), nullable=False, unique=True)   # = 管理员(owner)的 lid
+    owner_username = Column(String(50), nullable=False)
+    team_name = Column(String(255), nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+# 团队成员表：一个普通用户最多加入一个团队（member_username 唯一）
+class TeamMember(Base):
+    __tablename__ = 'team_members'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(String(255), nullable=False)
+    member_username = Column(String(50), nullable=False, unique=True)  # 一人一团队
+    member_lid = Column(String(255), nullable=False)
+    joined_at = Column(TIMESTAMP, server_default=func.now())
+
+# 团队加入申请表：注册时填了团队名即提交申请，由管理员审批通过后写入 TeamMember
+class TeamRequest(Base):
+    __tablename__ = 'team_requests'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(String(255), nullable=False)          # 申请的团队（= admin lid）
+    applicant_username = Column(String(50), nullable=False)
+    status = Column(String(16), nullable=False, default='pending', server_default='pending')  # pending / approved / rejected
+    created_at = Column(TIMESTAMP, server_default=func.now())
 
 # 定义 Knowledge 表
 class Knowledge(Base):

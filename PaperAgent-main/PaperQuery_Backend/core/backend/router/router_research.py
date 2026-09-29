@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.backend.crud.crud_user import query_user
 from core.backend.db.models import Artifact, Document, ResearchStep, ResearchTask
-from core.backend.utils.utils import get_db
+from core.backend.utils.utils import attach_workspace_lid, get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 router = APIRouter()
@@ -39,7 +39,7 @@ def _get_user(token: str, db: Session):
     user = query_user(db, username=username)
     if user is None:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
-    return user
+    return attach_workspace_lid(db, user)
 
 
 class ResearchTaskCreate(BaseModel):
@@ -219,7 +219,7 @@ def create_task(
         raise HTTPException(status_code=503, detail="Research 编排组件未初始化")
 
     owned_ids = {
-        row.uid for row in db.query(Document.uid).filter(Document.lid == user.lid).all()
+        row.uid for row in db.query(Document.uid).filter(Document.lid == user.workspace_lid).all()
     }
     if req.document_ids and not set(req.document_ids).issubset(owned_ids):
         raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
@@ -228,7 +228,7 @@ def create_task(
     parent = None
     prior_artifacts = []
     if req.parent_task_id:
-        parent = db.query(ResearchTask).filter(ResearchTask.task_id == req.parent_task_id, ResearchTask.lid == user.lid).first()
+        parent = db.query(ResearchTask).filter(ResearchTask.task_id == req.parent_task_id, ResearchTask.lid == user.workspace_lid).first()
         if parent is None:
             raise HTTPException(status_code=404, detail="上一轮研究任务不存在")
         prior_artifacts = [json.loads(item.data_json) for item in db.query(Artifact).filter(Artifact.task_id == parent.task_id).all() if item.data_json]
@@ -238,7 +238,7 @@ def create_task(
     task_id = uuid.uuid4().hex[:12]
     task = ResearchTask(
         task_id=task_id,
-        lid=user.lid,
+        lid=user.workspace_lid,
         goal=req.goal,
         mode=req.mode,
         parent_task_id=req.parent_task_id,
@@ -272,7 +272,7 @@ def list_tasks(
     user = _get_user(token, db)
     tasks = (
         db.query(ResearchTask)
-        .filter(ResearchTask.lid == user.lid)
+        .filter(ResearchTask.lid == user.workspace_lid)
         .order_by(ResearchTask.created_at.desc())
         .all()
     )
@@ -302,7 +302,7 @@ def get_task(
 ):
     user = _get_user(token, db)
     task = db.query(ResearchTask).filter(
-        ResearchTask.task_id == task_id, ResearchTask.lid == user.lid
+        ResearchTask.task_id == task_id, ResearchTask.lid == user.workspace_lid
     ).first()
     if task is None:
         return {"status_code": 404, "msg": "任务不存在"}

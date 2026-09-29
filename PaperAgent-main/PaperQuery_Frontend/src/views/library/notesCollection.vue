@@ -26,8 +26,8 @@ onMounted(async () => {
   catch (cause: any) { error.value = cause?.message || '笔记集加载失败' }
   finally { loading.value = false }
 })
-const openNote = (note: NoteEntry) => router.push({ name: 'pdfInfo',
-  params: { knowledgeID: note.knowledgeID, documentID: note.documentID }, query: { tab: 'note' } })
+const openNote = (note: NoteEntry) => router.push({ name: 'noteFullscreen',
+  params: { knowledgeID: note.knowledgeID, documentID: note.documentID } })
 const removeNote = async (note: NoteEntry) => {
   const key = `${note.knowledgeID}:${note.documentID}`
   try {

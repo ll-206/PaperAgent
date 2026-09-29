@@ -29,7 +29,7 @@ def check(name, response, expected=200):
 
 login = check("login", session.post(f"{BASE}/login", json={"username": USER, "password": PASSWORD}))
 session.headers["Authorization"] = f"Bearer {login.json()['data']['access_token']}"
-check("auth", session.get(f"{BASE}/testlogin"))
+check("auth", session.get(f"{BASE}/user/me"))
 libraries = check("libraries", session.get(f"{BASE}/knowledges/getKnowledgeList")).json()["data"]["knowledgeList"]
 print(f"library count: {len(libraries)}")
 if not libraries:

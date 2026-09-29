@@ -3,9 +3,16 @@ import { LoginResponse } from '@/types/type'
 // import api from '@/api/api'
 import axios from 'axios'
 
-export const register = async (url: string, user: { username: string; password: string }) => {
+export const register = async (
+  url: string,
+  user: { username: string; password: string; teamName?: string },
+) => {
   try {
-    const response = await axios.post(`${url}/register`, user, { timeout: 10000 })
+    const response = await axios.post(
+      `${url}/register`,
+      { username: user.username, password: user.password, team_name: user.teamName ?? '' },
+      { timeout: 10000 },
+    )
     return response.data
   } catch (error: any) {
     throw new Error(error?.response?.data?.detail || error?.response?.data?.msg || '注册失败，请稍后重试')
@@ -18,18 +25,15 @@ export const login = async (url: string, user: any): Promise<LoginResponse> => {
     timeout: 10000,
   })
   try {
-    console.log(url)
-    const response = await api.post<LoginResponse>(`/login`, user, {
-      headers: {
-        // Authorization: 'token 64029ecb13c9dac1df563410cddf6d458c3c7393',
-        // 'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    })
+    const response = await api.post<LoginResponse>(`/login`, user)
     // 添加header
     const resp = response.data
     if (resp) {
       localStorage.setItem('token', resp.data.access_token)
       localStorage.setItem('username', user.username)
+      // 角色与工作空间：决定侧边栏「管理团队」入口与共享知识库
+      if (resp.data.role) localStorage.setItem('role', resp.data.role)
+      if (resp.data.workspace_lid) localStorage.setItem('workspaceLid', resp.data.workspace_lid)
     }
     return response.data
   } catch (e: any) {

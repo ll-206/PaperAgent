@@ -20,14 +20,14 @@ async def get_current_note(token: str=Depends(oauth2_scheme),db:Session=Depends(
     document = db.query(Document).filter(
         Document.uid == noteRequest.documentID,
         Document.knowledgeID == noteRequest.knowledgeID,
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    request_data = NoteQuery(knowledgeID=noteRequest.knowledgeID, lid=user.lid, uid=noteRequest.documentID)
+    request_data = NoteQuery(knowledgeID=noteRequest.knowledgeID, lid=user.workspace_lid, uid=noteRequest.documentID)
     notequeryresult = get_note(db, request_data)
     if not notequeryresult:
-        notequeryresult = Note(knowledgeID=noteRequest.knowledgeID, lid=user.lid, uid=noteRequest.documentID, note="")
+        notequeryresult = Note(knowledgeID=noteRequest.knowledgeID, lid=user.workspace_lid, uid=noteRequest.documentID, note="")
         db.add(notequeryresult)
         db.commit()
     #根据条件进行查询
@@ -47,19 +47,19 @@ async def update_current_note(noteUpdateRequest:NoteUpdateRequest,token:str=Depe
     document = db.query(Document).filter(
         Document.uid == noteUpdateRequest.documentID,
         Document.knowledgeID == noteUpdateRequest.knowledgeID,
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    request_data = NoteQuery(knowledgeID=noteUpdateRequest.knowledgeID, lid=user.lid, uid=noteUpdateRequest.documentID)
+    request_data = NoteQuery(knowledgeID=noteUpdateRequest.knowledgeID, lid=user.workspace_lid, uid=noteUpdateRequest.documentID)
     if not get_note(db, request_data):
-        db.add(Note(knowledgeID=noteUpdateRequest.knowledgeID, lid=user.lid, uid=noteUpdateRequest.documentID, note=noteUpdateRequest.note))
+        db.add(Note(knowledgeID=noteUpdateRequest.knowledgeID, lid=user.workspace_lid, uid=noteUpdateRequest.documentID, note=noteUpdateRequest.note))
         db.commit()
         return {"status_code": 200, "msg": "update note successfully"}
     #更新笔记
     updateQueryData=NoteUpdate(
         knowledgeID=noteUpdateRequest.knowledgeID,
-        lid=user.lid,
+        lid=user.workspace_lid,
         uid=noteUpdateRequest.documentID,
         note=noteUpdateRequest.note
     )
@@ -81,7 +81,7 @@ async def delete_current_note(knowledge_id: str, document_id: str,
             .join(Document, (Document.uid == Note.uid)
                   & (Document.knowledgeID == Note.knowledgeID)
                   & (Document.lid == Note.lid))
-            .filter(Note.lid == user.lid, Note.knowledgeID == knowledge_id,
+            .filter(Note.lid == user.workspace_lid, Note.knowledgeID == knowledge_id,
                     Note.uid == document_id)
             .first())
     if note is None:

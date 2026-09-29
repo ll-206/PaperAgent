@@ -94,7 +94,7 @@ async def get_documents_all(knowledgeID:str, token: str = Depends(oauth2_scheme)
     user = await get_current_user(token, db)
     knowledge = db.query(Knowledge).filter(
         Knowledge.knowledgeID == knowledgeID,
-        Knowledge.lid == user.lid,
+        Knowledge.lid == user.workspace_lid,
     ).first()
     if not knowledge:
         return JSONResponse(
@@ -118,7 +118,7 @@ async def get_document_info(documentID: str,knowledgeID:str,token: str = Depends
     document =db.query(Document).filter(
         Document.uid == documentID,
         Document.knowledgeID == knowledgeID,
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
     ).first()
     if not document:
         return JSONResponse(
@@ -144,7 +144,7 @@ async def get_document_summarize(documentID: str,knowledgeID:str,token: str = De
     document = db.query(Document).filter(
         Document.uid == documentID,
         Document.knowledgeID == knowledgeID,
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
     ).first()
     if not document:
         return {
@@ -170,7 +170,7 @@ async def get_document(
     document = db.query(Document).filter(
         Document.uid == documentID,
         Document.knowledgeID == knowledgeID,
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
     ).first()
     if not document:
         return {
@@ -201,7 +201,7 @@ async def upload_document(
             )
         knowledge = db.query(Knowledge).filter(
             Knowledge.knowledgeID == knowledgeID,
-            Knowledge.lid == user.lid,
+            Knowledge.lid == user.workspace_lid,
         ).first()
         if not knowledge:
             return JSONResponse(
@@ -254,14 +254,14 @@ async def upload_document(
             documentStatus=2,
             uid=file_md5,
             knowledgeID=knowledgeID,
-            lid=user.lid,
+            lid=user.workspace_lid,
             createTime=createtime,
         )
         db_document = create_document(db=db, document=document)
         db_document.documentVector = vectornum
         db.commit()
         create_note(db=db, info=NoteCreate(
-            uid=file_md5, knowledgeID=knowledgeID, lid=user.lid
+            uid=file_md5, knowledgeID=knowledgeID, lid=user.workspace_lid
         ))
         update_knowledge_content(db, vectornum, 1, knowledgeID)
     else:
@@ -271,7 +271,7 @@ async def upload_document(
             documentStatus=2,
             uid=file_md5,
             knowledgeID="THIS_IS_A_TMP_KID",
-            lid=user.lid,
+            lid=user.workspace_lid,
             createTime=createtime,
         )
         db_document = create_tmp_document(db=db, document=document)
@@ -303,7 +303,7 @@ async def import_external_paper(
     user = await get_current_user(token, db)
     owned = db.query(Knowledge).filter(
         Knowledge.knowledgeID == payload.knowledgeID,
-        Knowledge.lid == user.lid,
+        Knowledge.lid == user.workspace_lid,
     ).first()
     if owned is None:
         raise HTTPException(status_code=404, detail="目标知识库不存在")
@@ -335,7 +335,7 @@ async def upload_library_document(
     user =await get_current_user(token,db)
     knowledge = db.query(Knowledge).filter(
         Knowledge.knowledgeID == knowledgeID,
-        Knowledge.lid == user.lid,
+        Knowledge.lid == user.workspace_lid,
     ).first()
     if not knowledge:
         return JSONResponse(
@@ -372,10 +372,10 @@ async def upload_library_document(
 
     print("UID",uid)
     createtime=PythonDateTime.now(timezone.utc)
-    document = DocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/pdf/",stored_name),documentStatus=0,uid=uid,knowledgeID=knowledgeID,lid=user.lid,createTime=createtime)
+    document = DocumentCreate(documentName=documentFile.filename,documentPath=os.path.join("/res/pdf/",stored_name),documentStatus=0,uid=uid,knowledgeID=knowledgeID,lid=user.workspace_lid,createTime=createtime)
     ### 增加创建笔记
     addnotedata=NoteCreate(
-        uid=uid,knowledgeID=knowledgeID,lid=user.lid,
+        uid=uid,knowledgeID=knowledgeID,lid=user.workspace_lid,
     )
     create_note(db=db,info=addnotedata)
     ###
@@ -401,7 +401,7 @@ async def delete_document(deleteDocument:DeleteDocument,request:Request,token: s
     document = db.query(Document).filter(
         Document.uid == deleteDocument.documentID,
         Document.knowledgeID == deleteDocument.knowledgeID,
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
     ).first()
     if not document:
         return {
@@ -418,7 +418,7 @@ async def delete_document(deleteDocument:DeleteDocument,request:Request,token: s
     update_knowledge_content(db,-document.documentVector,-1,document.knowledgeID)
     ### 增加删除笔记
     delnotedata=NoteDelete(
-        uid=deleteDocument.documentID,knowledgeID=deleteDocument.knowledgeID,lid=user.lid,
+        uid=deleteDocument.documentID,knowledgeID=deleteDocument.knowledgeID,lid=user.workspace_lid,
     )
     del_note(db=db,delNote=delnotedata)
     ###

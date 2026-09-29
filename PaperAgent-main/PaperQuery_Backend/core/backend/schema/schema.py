@@ -49,6 +49,24 @@ class KnowledgeQuery(Response):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+# 注册请求：团队名为可选字段，填了=提交加入申请（团队名=管理员名字，待管理员审批）
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    team_name: str = ''   # 可选；填了即提交加入该团队的申请
+
+# 审批通过加入申请（管理员操作）
+class TeamApproveRequest(BaseModel):
+    username: str
+
+# 拒绝加入申请（管理员操作）
+class TeamRejectRequest(BaseModel):
+    username: str
+
+# 删除成员（管理员操作）
+class TeamRemoveRequest(BaseModel):
+    username: str
 # 文件Document创建
 class DocumentCreate(BaseModel):
     uid : str 

@@ -57,6 +57,12 @@ const routes: Array<RouteRecordRaw> = [
         name: 'pdfInfo',
         component: pdfInfo,
       },
+      // 笔记全屏编辑：左论文右笔记分栏（与笔记内「全屏编辑」、笔记集卡片共用入口）
+      {
+        path: 'note/fullscreen/:knowledgeID/:documentID',
+        name: 'noteFullscreen',
+        component: () => import('@/views/note/NoteFullscreen.vue'),
+      },
       {
         path: 'Chat',
         component: () => import('@/views/chat/chat.vue'),
@@ -65,6 +71,13 @@ const routes: Array<RouteRecordRaw> = [
         path: 'research',
         name: 'research',
         component: () => import('@/views/research/ResearchView.vue'),
+      },
+      // 团队管理：仅 admin 可进入（路由守卫见 router/index.ts）
+      {
+        path: 'team',
+        name: 'team',
+        component: () => import('@/views/team/TeamView.vue'),
+        meta: { requiresAuth: true, role: 'admin' },
       },
       {
         path: 'Note',

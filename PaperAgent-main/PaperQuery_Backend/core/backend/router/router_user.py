@@ -10,8 +10,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 
-from core.backend.schema.schema import LoginRequest
-from core.backend.db.models import User
+from core.backend.schema.schema import LoginRequest, RegisterRequest
+from core.backend.db.models import Team, TeamMember, TeamRequest, User
 from core.backend.utils.utils import *
 
 router = APIRouter()
@@ -35,17 +35,31 @@ def _verify_password(password: str, stored: str) -> bool:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(request: LoginRequest, db: Session = Depends(get_db)):
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
     username = request.username.strip()
     if not re.fullmatch(r"[A-Za-z0-9_\-]{3,50}", username):
         raise HTTPException(422, "用户名需为 3–50 位字母、数字、下划线或连字符")
     if len(request.password) < 8 or len(request.password) > 128:
         raise HTTPException(422, "密码长度需为 8–128 位")
     if query_user(db, username=username):
-        raise HTTPException(409, "用户名已存在")
+        raise HTTPException(409, "用户名已存在：该用户名可能曾被使用或曾被移出团队，请更换一个新用户名")
     user = User(username=username, password=_hash_password(request.password), lid=str(uuid.uuid4()))
     db.add(user)
     db.commit()
+    # 注册成功：若填写了团队名则提交加入申请（待管理员审批），团队不存在/无效也不阻塞注册
+    if request.team_name and request.team_name.strip():
+        team_name = request.team_name.strip()
+        team = db.query(Team).filter(Team.owner_username == team_name).first()
+        if team:
+            exists_pending = db.query(TeamRequest).filter(
+                TeamRequest.applicant_username == user.username,
+                TeamRequest.status == 'pending').first()
+            if not exists_pending:
+                db.add(TeamRequest(team_id=team.team_id, applicant_username=user.username, status='pending'))
+                db.commit()
+            return {"status_code": 201, "msg": "注册成功，已提交加入团队申请，待管理员审批"}
+        else:
+            return {"status_code": 201, "msg": "注册成功，团队不存在，未提交申请"}
     return {"status_code": 201, "msg": "注册成功，请登录"}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
@@ -64,7 +78,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],db: Ses
     user = query_user(db, username=username)
     if user is None:
         raise credentials_exception
-    return user
+    return attach_workspace_lid(db, user)
 
 
 @router.post("/login")
@@ -85,11 +99,19 @@ def login_for_access_token(loginrequest: LoginRequest,db: Session = Depends(get_
     return {
         "status_code": 200,
         "msg": "登录成功",
-        "data":{"access_token": access_token, "token_type": "Bearer","expire":generate_future_timestamp(int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")))}
+        "data":{"access_token": access_token, "token_type": "Bearer","expire":generate_future_timestamp(int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))),
+                "role": user.role, "workspace_lid": get_workspace_lid(db, user)}
     }
 
-# 测试登录状态
-@router.get("/testlogin")
-async def testlogin(token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
-    user =await get_current_user(token,db)
-    return user
+# 当前登录用户信息（供前端刷新角色与工作空间）
+@router.get("/user/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "status_code": 200,
+        "msg": "ok",
+        "data": {
+            "username": current_user.username,
+            "role": current_user.role,
+            "workspace_lid": current_user.workspace_lid,
+        },
+    }

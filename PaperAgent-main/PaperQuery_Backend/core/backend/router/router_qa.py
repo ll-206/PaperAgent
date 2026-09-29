@@ -62,19 +62,19 @@ def qa_stream(
         selected_ids = set(qa.document_ids)
         owned_ids = {
             row.uid for row in db.query(Document.uid).filter(
-                Document.lid == user.lid, Document.uid.in_(selected_ids)
+                Document.lid == user.workspace_lid, Document.uid.in_(selected_ids)
             ).all()
         }
         owned_ids.update(
             row.uid for row in db.query(TMPDocument.uid).filter(
-                TMPDocument.lid == user.lid, TMPDocument.uid.in_(selected_ids)
+                TMPDocument.lid == user.workspace_lid, TMPDocument.uid.in_(selected_ids)
             ).all()
         )
         if not selected_ids.issubset(owned_ids):
             raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
 
     # Count submitted Ask requests for this account. The event contains no question text.
-    db.add(ActivityEvent(lid=user.lid, event_type="ask"))
+    db.add(ActivityEvent(lid=user.workspace_lid, event_type="ask"))
     db.commit()
 
     trace_id = uuid.uuid4().hex[:12]

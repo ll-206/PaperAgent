@@ -1,23 +1,16 @@
-"""运行状态与无副作用测试接口。"""
+"""运行状态检查接口。"""
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.backend.router.dependencies import get_db
-from core.backend.router.router_user import get_current_user
 
 router = APIRouter()
-
-
-class EchoRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=2000)
 
 
 def component_status(app) -> dict:
@@ -64,61 +57,3 @@ def health_ready(request: Request, db: Session = Depends(get_db)):
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     return JSONResponse(payload, status_code=200 if is_ready else 503)
-
-
-@router.get("/test/capabilities", summary="读取当前测试能力")
-def test_capabilities(request: Request, _user=Depends(get_current_user)):
-    components = component_status(request.app)
-    return {
-        "status_code": 200,
-        "data": {
-            "models": [
-                name for name in ("deepseek", "kimi", "zhipu")
-                if components.get(name)
-            ],
-            "features": {
-                "ask_sse": True,
-                "library": components["vector_database"],
-                "research": components["research"],
-                "hybrid_retrieval": components["hybrid_retrieval"],
-                "session_history": True,
-            },
-            "test_endpoints": [
-                "GET /health/live",
-                "GET /health/ready",
-                "GET /test/capabilities",
-                "POST /test/echo",
-                "GET /test/sse",
-            ],
-        },
-    }
-
-
-@router.post("/test/echo", summary="认证与 JSON 往返测试")
-def test_echo(payload: EchoRequest, _user=Depends(get_current_user)):
-    return {
-        "status_code": 200,
-        "data": {"message": payload.message, "length": len(payload.message)},
-    }
-
-
-@router.get("/test/sse", summary="不调用模型的 SSE 连通性测试")
-def test_sse(_user=Depends(get_current_user)):
-    def generate():
-        events = (
-            ("meta", {"route": "TEST", "stream": True}),
-            ("delta", {"text": "Paper"}),
-            ("delta", {"text": "Agent"}),
-            ("done", {"ok": True}),
-        )
-        for event, data in events:
-            yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-        },
-    )

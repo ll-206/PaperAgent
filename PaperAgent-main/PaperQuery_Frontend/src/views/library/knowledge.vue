@@ -88,9 +88,7 @@ const filterTableData = computed(() =>
 
 const handleView = async (index: number, row: Document) => {
   // 在这里实现跳转到显示对应pdf的页面
-  console.log(index, row)
   if (row) {
-    console.log(row.documentName)
     // 向后端发送请求,获取对应的pdf文件
     router.push({
       name: 'pdfInfo',
@@ -116,7 +114,6 @@ const handleDelete = async (index: number, row: Document) => {
       tableData.value = tableData.value.filter(item => item.documentID !== row.documentID)
       // 同步移除对话页已绑定的该文档，避免残留 ID 仍在 Chat 会话中显示
       useDocumentListStore().deleteDocumentById(row.documentID)
-      console.log(index)
     }
   } catch (error: any) {
     if (error === 'cancel' || error === 'close') return

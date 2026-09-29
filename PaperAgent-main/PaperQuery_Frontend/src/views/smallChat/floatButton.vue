@@ -44,7 +44,6 @@ const handleKeyDown = (e: KeyboardEvent) => {
       // Shift + Enter 换行
       // e.preventDefault()
       inputValue.value += '\n'
-      console.log('换行')
     } else if (!e.shiftKey) {
       e.preventDefault()
       // Enter 发送消息

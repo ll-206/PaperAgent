@@ -23,7 +23,7 @@
       </div>
 
       <!-- Note content -->
-      <div v-if="!TranDisplay" class="translation-scroll h-full overflow-auto p-4">
+      <div v-if="!TranDisplay" class="translation-scroll note-scroll h-full overflow-auto p-4">
         <note class="w-full h-full" :knowledgeID="knowledgeID" :documentID="documentID"></note>
       </div>
     </div>
@@ -65,12 +65,10 @@ onMounted(() => {
 
 const displayTran = () => {
   TranDisplay.value = true
-  console.log("显示翻译")
 }
 
 const displayNote = () => {
   TranDisplay.value = false
-  console.log("显示笔记")
 }
 </script>
 
@@ -102,5 +100,9 @@ const displayNote = () => {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-all;
+}
+/* 内嵌笔记：透明底，跟随面板背景（与全屏页一致，无卡片/底色） */
+.note-scroll {
+  background: transparent;
 }
 </style>

@@ -8,7 +8,6 @@ const store = useStore()
 const router = useRouter()
 
 const logoutButton = () => {
-  console.log('logout')
   store.dispatch('logout')
   router.push('/login')
 }

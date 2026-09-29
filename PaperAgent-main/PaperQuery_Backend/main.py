@@ -29,6 +29,7 @@ from core.backend.router import (
     router_research,
     router_system,
     router_dashboard,
+    router_team,
 )
 from core.common.config import settings
 from core.decision.engine import DecisionEngine
@@ -38,10 +39,35 @@ from core.vectordb.chromadb import AcadeChroma
 
 Base.metadata.create_all(bind=engine)
 with engine.begin() as connection:
+    if "role" not in {row[1] for row in connection.execute(text("PRAGMA table_info(users)"))}:
+        connection.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(16) NOT NULL DEFAULT 'user'"))
     if "category" not in {row[1] for row in connection.execute(text("PRAGMA table_info(posts)"))}:
         connection.execute(text("ALTER TABLE posts ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT '技术'"))
     if "parent_task_id" not in {row[1] for row in connection.execute(text("PRAGMA table_info(research_tasks)"))}:
         connection.execute(text("ALTER TABLE research_tasks ADD COLUMN parent_task_id VARCHAR(64)"))
+
+
+def _init_role_and_default_team():
+    """幂等初始化：确保 admin 用户有 admin 角色 + 存在默认团队（owner 为 admin）。
+    存量数据库也执行，保证老数据升级后同样具备团队能力。"""
+    from core.backend.db.models import Team, TeamMember, User
+
+    with SessionLocal() as session:
+        # 1) admin 用户角色置为 admin（若已是则跳过）
+        admin = session.query(User).filter(User.username == "admin").first()
+        if admin and admin.role != "admin":
+            admin.role = "admin"
+            session.commit()
+        # 2) 若不存在 admin 的默认团队则创建（team_id 复用 admin 的 lid）
+        if admin:
+            team = session.query(Team).filter(Team.owner_username == "admin").first()
+            if not team:
+                session.add(Team(team_id=admin.lid, owner_username="admin", team_name="默认团队"))
+                session.commit()
+            print(f"[team] 默认团队就绪 team_id={admin.lid}")
+
+
+_init_role_and_default_team()
 
 
 def _build_skill_registry():
@@ -173,6 +199,7 @@ app.add_middleware(
 
 
 app.include_router(router_user.router, tags=["router_user"])
+app.include_router(router_team.router, tags=["team"])
 app.include_router(router_knowledge.router, tags=["knowledge"])
 app.include_router(router_document.router, tags=["router_document"])
 app.include_router(router_llm.router, tags=["router_llm"])

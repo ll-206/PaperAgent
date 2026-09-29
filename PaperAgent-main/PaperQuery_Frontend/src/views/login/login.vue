@@ -18,6 +18,7 @@ const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const registering = ref(false)
+const teamName = ref('') // 注册时填团队名 = 提交加入申请（待管理员审批）
 const busy = ref(false)
 const router = useRouter()
 
@@ -38,10 +39,14 @@ const Login = async () => {
 
   try {
     if (registering.value) {
-      await register(url.value, user)
+      const res = await register(url.value, {
+        username: username.value,
+        password: password.value,
+        teamName: teamName.value,
+      })
       registering.value = false
       confirmPassword.value = ''
-      ElNotification.success({ title: '注册成功', message: '请使用新账户登录' })
+      ElNotification.success({ title: '注册成功', message: res?.msg || '请使用新账户登录' })
       return
     }
     await login(url.value, user)
@@ -146,6 +151,16 @@ const Login = async () => {
                 <div v-if="registering" class="flex flex-col space-y-1.5">
                   <Label for="confirm-password">确认密码</Label>
                   <Input id="confirm-password" v-model="confirmPassword" type="password" autocomplete="new-password" placeholder="再次输入密码" required />
+                </div>
+                <div v-if="registering" class="flex flex-col space-y-1.5">
+                  <Label for="team-name">团队名（可选）</Label>
+                  <Input
+                    id="team-name"
+                    v-model="teamName"
+                    placeholder="填写团队管理员名字，如 admin"
+                    autocomplete="off"
+                  />
+                  <p class="team-name-hint">填了团队名 = 提交加入申请，管理员通过后生效</p>
                 </div>
               </div>
             </CardContent>
@@ -358,6 +373,12 @@ const Login = async () => {
     inset 2px 2px 4px #acb2bd,
     inset -2px -2px 4px #ffffff,
     0 0 0 3px rgba(109, 91, 208, 0.2);
+}
+.team-name-hint {
+  margin: 0;
+  color: #8a8fa3;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .login-footer {
   display: flex;

@@ -29,12 +29,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 @router.get("/knowledges/getLibraryInfo")
 async def describe_knowledge(token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
     user =await get_current_user(token,db)
-    Knowledgecount,filecount,vectorcount=get_knowledges_statistics(db, user.lid)
+    Knowledgecount,filecount,vectorcount=get_knowledges_statistics(db, user.workspace_lid)
     return {
         "status_code": 200,
         "msg": "Get knowledge statistics successfully",
         "data": {
-            "libraryID" : user.lid,
+            "libraryID" : user.workspace_lid,
             "knowledgeNumSum": Knowledgecount,
             "documentNumSum": filecount,
             "vectorNumSum": vectorcount
@@ -46,8 +46,8 @@ async def describe_knowledge(token: str = Depends(oauth2_scheme),db: Session = D
 async def get_knowledges_all(token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
     #获取当前用户
     user =await get_current_user(token,db)
-    print(user.lid)
-    knowledges=get_knowledge_by_lid(db, user.lid)
+    print(user.workspace_lid)
+    knowledges=get_knowledge_by_lid(db, user.workspace_lid)
     filtered_documents = [{"knowledgeID": knowledge.knowledgeID,"knowledgeName":knowledge.knowledgeName, "knowledgeDescription":knowledge.knowledgeDescription,"documentNum":knowledge.documentNum,"vectorNum":knowledge.vectorNum} for knowledge in knowledges]
     
     print(filtered_documents)
@@ -64,12 +64,12 @@ async def get_knowledges_all(token: str = Depends(oauth2_scheme),db: Session = D
 async def create_knowledges(knowledge: KnowledgeCreate, token: str = Depends(oauth2_scheme),db: Session = Depends(get_db)):
     user =await get_current_user(token,db)
     # 查询是否有重复的知识名
-    if get_knowledge_by_name_uid(db, knowledge.knowledgeName, user.lid):
+    if get_knowledge_by_name_uid(db, knowledge.knowledgeName, user.workspace_lid):
         return {
             "status_code": 409,
             "msg": "Knowledge name already exists",
         }
-    knowledge.lid = user.lid
+    knowledge.lid = user.workspace_lid
     knowledge.knowledgeID = str(uuid.uuid1())
     created_k= create_knowledge(db, knowledge)
 
@@ -95,13 +95,13 @@ async def update_knowledge(
     user = await get_current_user(token, db)
     knowledge = db.query(Knowledge).filter(
         Knowledge.knowledgeID == payload.knowledgeID,
-        Knowledge.lid == user.lid,
+        Knowledge.lid == user.workspace_lid,
     ).first()
     if not knowledge:
         return {"status_code": 404, "msg": "Knowledge not found"}
 
     duplicate = db.query(Knowledge).filter(
-        Knowledge.lid == user.lid,
+        Knowledge.lid == user.workspace_lid,
         Knowledge.knowledgeName == payload.knowledgeName,
         Knowledge.knowledgeID != payload.knowledgeID,
     ).first()
@@ -139,7 +139,7 @@ async def delete_knowledges(
     for kid in payload.knowledgeIDs:
         knowledge = (
             db.query(Knowledge)
-            .filter(Knowledge.knowledgeID == kid, Knowledge.lid == user.lid)
+            .filter(Knowledge.knowledgeID == kid, Knowledge.lid == user.workspace_lid)
             .first()
         )
         if not knowledge:
@@ -148,7 +148,7 @@ async def delete_knowledges(
         # 级联删除该知识下的文档
         docs = (
             db.query(Document)
-            .filter(Document.knowledgeID == kid, Document.lid == user.lid)
+            .filter(Document.knowledgeID == kid, Document.lid == user.workspace_lid)
             .all()
         )
         for doc in docs:
@@ -162,7 +162,7 @@ async def delete_knowledges(
             try:
                 del_note(
                     db=db,
-                    delNote=NoteDelete(uid=doc.uid, knowledgeID=kid, lid=user.lid),
+                    delNote=NoteDelete(uid=doc.uid, knowledgeID=kid, lid=user.workspace_lid),
                 )
             except Exception:
                 pass
@@ -186,7 +186,7 @@ async def delete_knowledges(
         # 删除该知识下的临时文档记录
         db.query(TMPDocument).filter(
             TMPDocument.knowledgeID == kid,
-            TMPDocument.lid == user.lid,
+            TMPDocument.lid == user.workspace_lid,
         ).delete(synchronize_session=False)
         # 删除知识本身
         db.delete(knowledge)

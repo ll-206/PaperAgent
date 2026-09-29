@@ -38,9 +38,10 @@
 </template>
 
 <script setup lang="ts">
-import { sidebarItems } from './utils/sidebar'
+import { getSidebarItems } from './utils/sidebar'
 import { CircleCheck, Menu } from 'lucide-vue-next'
 import paperAgentMark from '@/assets/img/paperagent-mark.png'
+import axios from 'axios'
 
 defineProps({
   isCollapsed: Boolean,
@@ -56,6 +57,32 @@ const isActive = (link: string) => {
   if (link.includes('/forum')) return route.path.includes('/forum')
   return route.path.toLowerCase().startsWith(link.toLowerCase())
 }
+
+// 按角色动态渲染侧边栏：仅 admin 显示「管理团队」
+const role = ref(localStorage.getItem('role') || '')
+const sidebarItems = ref(getSidebarItems(role.value))
+
+// 老会话（功能上线前已登录）localStorage 中无 role，登录后拉取一次 /user/me 补齐
+onMounted(async () => {
+  if (role.value) return
+  const token = localStorage.getItem('token')
+  if (!token) return
+  try {
+    const base = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001'
+    const { data } = await axios.get(`${base}/user/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10000,
+    })
+    if (data?.data?.role) {
+      role.value = data.data.role
+      localStorage.setItem('role', data.data.role)
+      if (data.data.workspace_lid) localStorage.setItem('workspaceLid', data.data.workspace_lid)
+      sidebarItems.value = getSidebarItems(role.value)
+    }
+  } catch {
+    // 拉取失败不阻塞界面，仍按无角色渲染（行为与改造前一致）
+  }
+})
 </script>
 
 <style scoped>

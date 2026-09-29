@@ -27,13 +27,13 @@ def _today():
 @router.post("/dashboard/reading")
 async def record_reading(pulse: ReadingPulse, user=Depends(get_current_user), db: Session = Depends(get_db)):
     document = db.query(Document).filter(
-        Document.lid == user.lid,
+        Document.lid == user.workspace_lid,
         Document.knowledgeID == pulse.knowledgeID,
         Document.uid == pulse.documentID,
     ).first()
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    db.add(ActivityEvent(lid=user.lid, event_type="reading", knowledge_id=pulse.knowledgeID,
+    db.add(ActivityEvent(lid=user.workspace_lid, event_type="reading", knowledge_id=pulse.knowledgeID,
                          document_id=pulse.documentID, duration_seconds=pulse.seconds))
     db.commit()
     return {"status_code": 200, "msg": "reading time recorded"}
@@ -44,7 +44,7 @@ async def note_collection(user=Depends(get_current_user), db: Session = Depends(
     rows = (db.query(Note, Document, Knowledge)
             .join(Document, (Document.uid == Note.uid) & (Document.knowledgeID == Note.knowledgeID) & (Document.lid == Note.lid))
             .join(Knowledge, (Knowledge.knowledgeID == Note.knowledgeID) & (Knowledge.lid == Note.lid))
-            .filter(Note.lid == user.lid, Note.note.isnot(None), Note.note != "")
+            .filter(Note.lid == user.workspace_lid, Note.note.isnot(None), Note.note != "")
             .order_by(Knowledge.knowledgeName, Document.documentName)
             .all())
     return {"status_code": 200, "data": [
@@ -64,25 +64,25 @@ async def overview(user=Depends(get_current_user), db: Session = Depends(get_db)
     local_start = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
     start_utc = local_start.astimezone(timezone.utc).replace(tzinfo=None)
     end_utc = (local_start + timedelta(days=1)).astimezone(timezone.utc).replace(tzinfo=None)
-    libraries = db.query(Knowledge).filter(Knowledge.lid == user.lid).all()
-    documents = db.query(Document).filter(Document.lid == user.lid).all()
+    libraries = db.query(Knowledge).filter(Knowledge.lid == user.workspace_lid).all()
+    documents = db.query(Document).filter(Document.lid == user.workspace_lid).all()
     knowledge_names = {item.knowledgeID: item.knowledgeName for item in libraries}
     document_names = {(item.knowledgeID, item.uid): item for item in documents}
     note_keys = {(item.knowledgeID, item.uid) for item in db.query(Note).filter(
-        Note.lid == user.lid, Note.note.isnot(None), Note.note != "").all()}
+        Note.lid == user.workspace_lid, Note.note.isnot(None), Note.note != "").all()}
 
     ask_count = db.query(func.count(ActivityEvent.id)).filter(
-        ActivityEvent.lid == user.lid, ActivityEvent.event_type == "ask", ActivityEvent.created_at >= start).scalar() or 0
-    research = (db.query(ResearchTask).filter(ResearchTask.lid == user.lid,
+        ActivityEvent.lid == user.workspace_lid, ActivityEvent.event_type == "ask", ActivityEvent.created_at >= start).scalar() or 0
+    research = (db.query(ResearchTask).filter(ResearchTask.lid == user.workspace_lid,
                 ResearchTask.created_at >= start_utc, ResearchTask.created_at < end_utc)
                 .order_by(ResearchTask.created_at.desc()).all())
     posts = db.query(Post).order_by(Post.publishtime_timestamp.desc()).limit(30).all()
     today_posts = [item for item in posts if (item.publishtime_timestamp or 0) >= start_epoch]
-    my_posts = [item for item in today_posts if item.lid == user.lid]
+    my_posts = [item for item in today_posts if item.lid == user.workspace_lid]
     uploads = [item for item in documents if item.createTime and start_utc <= item.createTime < end_utc]
 
     readings = {}
-    pulses = db.query(ActivityEvent).filter(ActivityEvent.lid == user.lid,
+    pulses = db.query(ActivityEvent).filter(ActivityEvent.lid == user.workspace_lid,
         ActivityEvent.event_type == "reading", ActivityEvent.created_at >= start).all()
     for pulse in pulses:
         key = (pulse.knowledge_id, pulse.document_id)

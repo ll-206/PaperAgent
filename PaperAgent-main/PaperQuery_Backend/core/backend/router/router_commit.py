@@ -34,7 +34,7 @@ async def create_commit_handler(background_tasks: BackgroundTasks, request:Reque
     user =await get_current_user(token,db)
     createtime=datetime.now(timezone.utc)
     commitdata=CommitCreate(
-        lid=user.lid,
+        lid=user.workspace_lid,
         postid=commitCreateRequest.postid,
         username=user.username,
         commitid=str(uuid.uuid1()),

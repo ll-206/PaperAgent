@@ -19,8 +19,4 @@ import Content from './content/ContentView.vue'
 import SideBar from './sidebar/SideBar.vue'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 // import { useMessageListStore } from '@/stores/messageList'
-
-onMounted(() => {
-  console.log('Chat page mounted')
-})
 </script>

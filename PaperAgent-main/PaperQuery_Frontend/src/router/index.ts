@@ -28,9 +28,19 @@ router.beforeEach((to, _from, next) => {
   if (to.matched.some((record) => record.meta.requiresAuth) && !loggedIn) {
     console.log('未登录')
     next('/login')
-  } else {
-    next()
+    return
   }
+
+  // 仅 admin 可访问的路由（如团队管理），普通用户跳回首页
+  if (to.matched.some((record) => record.meta.role === 'admin')) {
+    const role = localStorage.getItem('role')
+    if (role !== 'admin') {
+      next('/home/dashboard')
+      return
+    }
+  }
+
+  next()
 })
 
 router.afterEach(() => {

@@ -2,6 +2,8 @@ export interface TokenData {
   access_token: string
   token_type: string
   expire: number
+  role?: string
+  workspace_lid?: string
 }
 
 export interface Knowledge {

@@ -71,3 +71,21 @@ async def update_current_note(noteUpdateRequest:NoteUpdateRequest,token:str=Depe
         "status_code":200,
         "msg":"update note sucessfully",
     }
+
+
+@router.delete("/note/{knowledge_id}/{document_id}")
+async def delete_current_note(knowledge_id: str, document_id: str,
+                              token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    user = await get_current_user(token, db)
+    note = (db.query(Note)
+            .join(Document, (Document.uid == Note.uid)
+                  & (Document.knowledgeID == Note.knowledgeID)
+                  & (Document.lid == Note.lid))
+            .filter(Note.lid == user.lid, Note.knowledgeID == knowledge_id,
+                    Note.uid == document_id)
+            .first())
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    db.delete(note)
+    db.commit()
+    return {"status_code": 200, "msg": "note deleted"}

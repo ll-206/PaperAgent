@@ -227,6 +227,7 @@ export const translateText = async (text: string) => {
       headers: {
         Authorization: token,
       },
+      timeout: 90000,
     })
     return resp.data
   } catch (e: any) {

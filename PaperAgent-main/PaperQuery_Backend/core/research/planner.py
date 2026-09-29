@@ -36,10 +36,10 @@ class Planner:
         self.llm = llm
         self.registry = registry
 
-    def plan(self, goal: str, task_id: str | None = None) -> TaskPlan:
+    def plan(self, goal: str, task_id: str | None = None, llm=None) -> TaskPlan:
         skills_desc = json.dumps(self.registry.describe(), ensure_ascii=False)
         prompt = PLANNER_PROMPT.format(skills=skills_desc, goal=goal)
-        resp = self.llm.invoke(prompt)
+        resp = (llm or self.llm).invoke(prompt)
         text = resp.content if hasattr(resp, "content") else str(resp)
         data = json.loads(_clean_json(text))
         if not task_id:

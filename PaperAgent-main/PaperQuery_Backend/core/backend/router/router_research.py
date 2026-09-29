@@ -2,18 +2,22 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
+import time
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
+from langchain_core.callbacks import BaseCallbackHandler
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from core.backend.crud.crud_user import query_user
 from core.backend.db.models import Artifact, Document, ResearchStep, ResearchTask
@@ -21,6 +25,8 @@ from core.backend.utils.utils import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 router = APIRouter()
+logger = logging.getLogger(__name__)
+_research_slots = threading.BoundedSemaphore(2)
 
 
 def _get_user(token: str, db: Session):
@@ -68,17 +74,149 @@ def _json_dumps(value: Any) -> str:
     return json.dumps(_json_safe(value), ensure_ascii=False, default=str)
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None
+            else value.astimezone(timezone.utc)).isoformat()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class _ResearchTokenHeartbeat(BaseCallbackHandler):
+    """Streaming tokens refresh task activity without imposing a total deadline."""
+
+    def __init__(self, touch):
+        self.touch = touch
+        self.last_touch = 0.0
+
+    def on_llm_new_token(self, token: str, **kwargs):
+        if not token or time.monotonic() - self.last_touch < 8:
+            return
+        self.last_touch = time.monotonic()
+        try:
+            self.touch()
+        except Exception:
+            logger.warning("Could not save research heartbeat", exc_info=True)
+
+
+def _run_research_task(task_id: str, planning_goal: str, allowed_ids: list[str],
+                       parent_task_id: str | None, prior_artifacts: list[dict],
+                       orchestrator, llm_provider, db_factory):
+    def touch():
+        with db_factory() as session:
+            task = session.query(ResearchTask).filter_by(task_id=task_id).first()
+            if task and task.status == "RUNNING":
+                task.updated_at = _utc_now()
+                session.commit()
+
+    def on_plan(plan):
+        with db_factory() as session:
+            task = session.query(ResearchTask).filter_by(task_id=task_id).one()
+            task.plan_json = plan.model_dump_json()
+            task.updated_at = _utc_now()
+            session.commit()
+
+    def on_step_start(step):
+        with db_factory() as session:
+            session.add(ResearchStep(
+                step_id=step.step_id, task_id=task_id, skill_name=step.skill,
+                status="RUNNING",
+            ))
+            task = session.query(ResearchTask).filter_by(task_id=task_id).one()
+            task.updated_at = _utc_now()
+            session.commit()
+
+    def on_step(step, result):
+        with db_factory() as session:
+            row = session.query(ResearchStep).filter_by(task_id=task_id, step_id=result.step_id).first()
+            if row is None:
+                row = ResearchStep(step_id=result.step_id, task_id=task_id, skill_name=step.skill)
+                session.add(row)
+            row.status = result.status
+            row.output_json = _json_dumps(result.output)
+            row.error = result.error
+            row.duration_ms = result.duration_ms
+            task = session.query(ResearchTask).filter_by(task_id=task_id).one()
+            task.updated_at = _utc_now()
+            session.commit()
+
+    with _research_slots:
+        try:
+            with db_factory() as session:
+                task = session.query(ResearchTask).filter_by(task_id=task_id).one()
+                task.status = "RUNNING"
+                task.updated_at = _utc_now()
+                session.commit()
+
+            context = {
+                "allowed_document_ids": allowed_ids,
+                "parent_task_id": parent_task_id,
+                "prior_artifacts": prior_artifacts,
+                "_task_id": task_id,
+                "_on_plan": on_plan,
+                "_on_step_start": on_step_start,
+                "_on_step": on_step,
+            }
+            if llm_provider is not None:
+                research_llm = llm_provider.get_stream_llm("deepseek").with_config(
+                    callbacks=[_ResearchTokenHeartbeat(touch)]
+                )
+                context["_research_llm"] = research_llm
+                context["llm"] = research_llm
+            state = orchestrator.run(planning_goal, context=context)
+
+            with db_factory() as session:
+                task = session.query(ResearchTask).filter_by(task_id=task_id).one()
+                task.plan_json = state.plan.model_dump_json()
+                for result in state.step_results:
+                    if not session.query(ResearchStep).filter_by(task_id=task_id, step_id=result.step_id).first():
+                        session.add(ResearchStep(
+                            step_id=result.step_id, task_id=task_id,
+                            skill_name=next((s.skill for s in state.plan.steps if s.step_id == result.step_id), ""),
+                            status=result.status, output_json=_json_dumps(result.output),
+                            error=result.error, duration_ms=result.duration_ms,
+                        ))
+                for artifact in state.artifacts:
+                    safe_artifact = _json_safe(artifact)
+                    artifact_id = safe_artifact.get("artifact_id") or uuid.uuid4().hex
+                    safe_artifact["artifact_id"] = artifact_id
+                    session.add(Artifact(
+                        artifact_id=artifact_id, task_id=task_id,
+                        type=safe_artifact.get("type", ""), title=safe_artifact.get("title", ""),
+                        data_json=_json_dumps(safe_artifact),
+                    ))
+                task.status = state.status
+                task.updated_at = _utc_now()
+                session.commit()
+        except Exception as exc:
+            logger.exception("Research task %s failed", task_id)
+            with db_factory() as session:
+                task = session.query(ResearchTask).filter_by(task_id=task_id).first()
+                if task:
+                    task.status = "FAILED"
+                    task.updated_at = _utc_now()
+                    session.add(ResearchStep(
+                        step_id="system_error", task_id=task_id, skill_name="research",
+                        status="FAILED", error=str(exc)[:1200], duration_ms=0,
+                    ))
+                    session.commit()
+
+
 @router.post("/research/tasks")
 def create_task(
     req: ResearchTaskCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
     user = _get_user(token, db)
     orchestrator = getattr(request.app, "research_orchestrator", None)
     if orchestrator is None:
-        return {"status_code": 503, "msg": "Research 编排组件未初始化"}
+        raise HTTPException(status_code=503, detail="Research 编排组件未初始化")
 
     owned_ids = {
         row.uid for row in db.query(Document.uid).filter(Document.lid == user.lid).all()
@@ -97,57 +235,32 @@ def create_task(
     prior_digest = "\n".join(f"- {item.get('title', '')}: {str(item.get('markdown') or item.get('report') or item.get('papers') or item.get('raw') or '')[:500]}" for item in prior_artifacts[:4])
     planning_goal = req.goal if not parent else f"{req.goal}\n\n上一轮研究目标：{parent.goal}\n上一轮结果：\n{prior_digest[:1800]}"
 
-    try:
-        state = orchestrator.run(planning_goal, context={"allowed_document_ids": allowed_ids, "parent_task_id": req.parent_task_id, "prior_artifacts": prior_artifacts})
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Research 执行失败: {exc}") from exc
-
-    # 持久化任务
+    task_id = uuid.uuid4().hex[:12]
     task = ResearchTask(
-        task_id=state.task_id,
+        task_id=task_id,
         lid=user.lid,
         goal=req.goal,
         mode=req.mode,
         parent_task_id=req.parent_task_id,
-        status=state.status,
-        plan_json=state.plan.model_dump_json(),
+        status="PENDING",
     )
     try:
         db.add(task)
 
-        # 持久化步骤
-        for r in state.step_results:
-            db.add(ResearchStep(
-                step_id=r.step_id,
-                task_id=state.task_id,
-                skill_name=next((s.skill for s in state.plan.steps if s.step_id == r.step_id), ""),
-                status=r.status,
-                output_json=_json_dumps(r.output),
-                error=r.error,
-                duration_ms=r.duration_ms,
-            ))
-
-        # 持久化 artifacts。Skill 可不指定 ID，由路由生成稳定的唯一 ID。
-        for artifact in state.artifacts:
-            safe_artifact = _json_safe(artifact)
-            artifact_id = safe_artifact.get("artifact_id") or uuid.uuid4().hex
-            safe_artifact["artifact_id"] = artifact_id
-            db.add(Artifact(
-                artifact_id=artifact_id,
-                task_id=state.task_id,
-                type=safe_artifact.get("type", ""),
-                title=safe_artifact.get("title", ""),
-                data_json=_json_dumps(safe_artifact),
-            ))
-
         db.commit()
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Research 结果保存失败: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Research 任务保存失败: {exc}") from exc
+    db_factory = sessionmaker(bind=db.get_bind())
+    background_tasks.add_task(
+        _run_research_task, task_id, planning_goal, allowed_ids,
+        req.parent_task_id, prior_artifacts, orchestrator,
+        getattr(request.app, "llm", None), db_factory,
+    )
     return {
         "status_code": 200,
         "msg": "Research task created",
-        "data": {"task_id": state.task_id, "status": state.status},
+        "data": {"task_id": task_id, "status": "PENDING"},
     }
 
 
@@ -173,7 +286,8 @@ def list_tasks(
                 "status": t.status,
                 "mode": t.mode,
                 "parent_task_id": t.parent_task_id,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "created_at": _utc_iso(t.created_at),
+                "updated_at": _utc_iso(t.updated_at),
             }
             for t in tasks
         ],
@@ -202,6 +316,8 @@ def get_task(
             "goal": task.goal,
             "status": task.status,
             "parent_task_id": task.parent_task_id,
+            "created_at": _utc_iso(task.created_at),
+            "updated_at": _utc_iso(task.updated_at),
             "plan": json.loads(task.plan_json) if task.plan_json else None,
             "steps": [
                 {

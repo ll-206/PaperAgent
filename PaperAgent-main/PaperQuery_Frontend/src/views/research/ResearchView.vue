@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElNotification } from 'element-plus'
 import {
   ArrowUpRight,
@@ -28,6 +28,7 @@ interface TaskItem {
   status: string
   mode: string
   created_at?: string
+  updated_at?: string
   parent_task_id?: string
 }
 
@@ -36,7 +37,6 @@ interface StepInfo {
   title?: string
   skill_name: string
   status: string
-  parent_task_id?: string
   error?: string
   duration_ms?: number
 }
@@ -52,6 +52,8 @@ interface TaskDetail {
   task_id: string
   goal: string
   status: string
+  created_at?: string
+  updated_at?: string
   plan?: { steps: Array<{ step_id: string; title: string; skill: string }> }
   steps: StepInfo[]
   artifacts: ArtifactInfo[]
@@ -64,6 +66,20 @@ const currentTask = ref<TaskDetail | null>(null)
 const loadingDetail = ref(false)
 const historyCollapsed = ref(true)
 const parentTaskId = ref('')
+const clock = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | undefined
+let pollTimer: ReturnType<typeof setInterval> | undefined
+let polling = false
+
+const isActive = (status?: string) => status === 'PENDING' || status === 'RUNNING'
+const elapsedTime = (createdAt?: string) => {
+  if (!createdAt) return '0 秒'
+  const seconds = Math.max(0, Math.floor((clock.value - new Date(createdAt).getTime()) / 1000))
+  if (seconds < 60) return `${seconds} 秒`
+  return `${Math.floor(seconds / 60)} 分 ${String(seconds % 60).padStart(2, '0')} 秒`
+}
+const hasRecentActivity = (updatedAt?: string) =>
+  Boolean(updatedAt && clock.value - new Date(updatedAt).getTime() < 20000)
 
 const quickGoals = [
   '检索并比较近三年多模态大模型的代表性方法与数据集',
@@ -80,8 +96,20 @@ const failedTasks = computed(
 const completedSteps = computed(
   () => currentTask.value?.steps.filter((step) => step.status === 'SUCCESS').length || 0,
 )
+const displaySteps = computed<StepInfo[]>(() => {
+  if (!currentTask.value) return []
+  const planned = (currentTask.value.plan?.steps || []).map(step => ({
+    ...currentTask.value!.steps.find(result => result.step_id === step.step_id),
+    step_id: step.step_id,
+    title: step.title,
+    skill_name: step.skill,
+    status: currentTask.value!.steps.find(result => result.step_id === step.step_id)?.status || 'PENDING',
+  }))
+  const unplanned = currentTask.value.steps.filter(result => !planned.some(step => step.step_id === result.step_id))
+  return [...planned, ...unplanned]
+})
 const currentProgress = computed(() => {
-  const total = currentTask.value?.steps.length || 0
+  const total = currentTask.value?.plan?.steps?.length || currentTask.value?.steps.length || 0
   return total ? Math.round((completedSteps.value / total) * 100) : 0
 })
 
@@ -167,6 +195,7 @@ const statusLabel = (status: string) => {
   if (status === 'SUCCESS') return '已完成'
   if (status === 'FAILED') return '执行失败'
   if (status === 'RUNNING') return '执行中'
+  if (status === 'PENDING') return '排队中'
   return '等待中'
 }
 
@@ -182,7 +211,17 @@ const formatTime = (value?: string) => {
 
 onMounted(() => {
   loadTasks()
+  clockTimer = setInterval(() => { clock.value = Date.now() }, 1000)
+  pollTimer = setInterval(async () => {
+    if (polling || !tasks.value.some(task => isActive(task.status))) return
+    polling = true
+    try {
+      await loadTasks()
+      if (currentTask.value && isActive(currentTask.value.status)) await selectTask(currentTask.value.task_id)
+    } finally { polling = false }
+  }, 3000)
 })
+onBeforeUnmount(() => { clearInterval(clockTimer); clearInterval(pollTimer) })
 </script>
 
 <template>
@@ -277,11 +316,15 @@ onMounted(() => {
               <span class="detail-kicker">TASK {{ currentTask.task_id }}</span>
               <h2>{{ currentTask.goal }}</h2>
             </div>
-            <div class="detail-actions"><button v-if="currentTask.status === 'FAILED'" type="button" @click="retryTask(currentTask)">重新执行</button><button v-if="currentTask.status === 'SUCCESS'" type="button" @click="continueFromTask(currentTask)">基于结果继续研究</button><el-tag :type="statusType(currentTask.status)" size="large" effect="light">{{ statusLabel(currentTask.status) }}</el-tag></div>
+            <div class="detail-actions"><span v-if="isActive(currentTask.status)" class="elapsed-time"><Clock3 :size="15" /> 已研究 {{ elapsedTime(currentTask.created_at) }}</span><button v-if="currentTask.status === 'FAILED'" type="button" @click="retryTask(currentTask)">重新执行</button><button v-if="currentTask.status === 'SUCCESS'" type="button" @click="continueFromTask(currentTask)">基于结果继续研究</button><el-tag :type="statusType(currentTask.status)" size="large" effect="light">{{ statusLabel(currentTask.status) }}</el-tag></div>
           </div>
 
+          <p v-if="isActive(currentTask.status)" class="research-activity">
+            {{ currentTask.status === 'PENDING' ? '任务已创建，等待执行。' : hasRecentActivity(currentTask.updated_at) ? '研究任务近期有进展，正在继续执行。' : currentTask.plan ? '正在等待当前研究步骤返回；任务会继续运行，不受页面等待时间限制。' : '正在规划研究步骤，复杂任务可能需要较长时间。' }}
+          </p>
+
           <div class="progress-row">
-            <div><span>执行进度</span><strong>{{ completedSteps }} / {{ currentTask.steps.length }} 步</strong></div>
+            <div><span>执行进度</span><strong>{{ completedSteps }} / {{ currentTask.plan?.steps?.length || currentTask.steps.length }} 步</strong></div>
             <el-progress :percentage="currentProgress" :stroke-width="9" :show-text="false" />
           </div>
 
@@ -299,7 +342,7 @@ onMounted(() => {
 
           <div class="section-title trace-title"><span>02</span><div><h3>执行轨迹</h3><p>查看智能体的规划与运行状态</p></div></div>
           <div class="timeline">
-            <div v-for="(step, index) in currentTask.steps" :key="step.step_id" class="timeline-item">
+            <div v-for="(step, index) in displaySteps" :key="step.step_id" class="timeline-item">
               <div class="timeline-marker" :class="step.status.toLowerCase()">
                 <CheckCircle2 v-if="step.status === 'SUCCESS'" :size="17" />
                 <XCircle v-else-if="step.status === 'FAILED'" :size="17" />
@@ -397,6 +440,8 @@ onMounted(() => {
 .stat-task { display: flex; align-items: center; }.stat-task .retry-link { flex: none; width: auto; color: #6d5bd0; white-space: nowrap; }
 .continuation-label { display: flex; align-items: center; gap: 12px; margin: 4px 8px; color: #55489d; font-size: 11px; }.continuation-label button { text-decoration: underline; }
 .detail-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }.detail-actions button { padding: 6px 9px; border: 1px solid #ccc4ed; border-radius: 7px; color: #5e4bc2; background: #f7f5ff; font-size: 11px; }.detail-actions button:hover { background: #ebe6ff; }
+.elapsed-time { display: inline-flex; align-items: center; gap: 5px; color: #6152bd; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.research-activity { margin: 12px 0 0; color: #6b6c70; font-size: 12px; }
 .workspace-grid.history-collapsed { grid-template-columns: 52px minmax(0,1fr); }.history-collapsed .history-panel { padding: 8px; }.history-collapsed .panel-heading > div { display: none; }
 @media(max-width:1050px) { .workspace-grid.history-collapsed { grid-template-columns: 1fr; }.history-collapsed .history-panel { grid-row: 2; } }
 </style>

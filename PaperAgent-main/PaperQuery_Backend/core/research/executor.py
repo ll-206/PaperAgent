@@ -35,6 +35,8 @@ class Executor:
                 results.append(result)
                 step_outputs[step.step_id] = {}
                 step_statuses[step.step_id] = result.status
+                if callable(run_context.get("_on_step")):
+                    run_context["_on_step"](step, result)
                 continue
 
             skill = self.registry.get(step.skill)
@@ -44,6 +46,9 @@ class Executor:
                 skill_input["_previous_outputs"] = {
                     dep: step_outputs.get(dep) for dep in step.depends_on
                 }
+
+            if callable(run_context.get("_on_step_start")):
+                run_context["_on_step_start"](step)
 
             start = time.time()
             result = await skill.run(skill_input, run_context)
@@ -63,6 +68,8 @@ class Executor:
             step_outputs[step.step_id] = result.output
             step_statuses[step.step_id] = step_result.status
             results.append(step_result)
+            if callable(run_context.get("_on_step")):
+                run_context["_on_step"](step, step_result)
 
         return results
 

@@ -16,7 +16,10 @@ class ResearchOrchestrator:
         self.verifier = verifier
 
     def run(self, goal: str, context: dict | None = None) -> TaskState:
-        plan = self.planner.plan(goal)
+        context = context or {}
+        plan = self.planner.plan(goal, task_id=context.get("_task_id"), llm=context.get("_research_llm"))
+        if callable(context.get("_on_plan")):
+            context["_on_plan"](plan)
         step_results = asyncio.run(self.executor.run(plan, context=context))
 
         artifacts: list[dict] = []

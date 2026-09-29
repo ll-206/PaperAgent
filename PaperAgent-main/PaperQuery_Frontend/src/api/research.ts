@@ -1,6 +1,6 @@
 import api from '@/api/api'
 
-// 创建 Research 任务（可能耗时较长，覆盖默认 timeout）
+// 只创建持久化任务；研究在后端继续执行，通过查询接口读取进度。
 export const createResearchTask = async (
   goal: string,
   mode = 'research',
@@ -13,7 +13,7 @@ export const createResearchTask = async (
     { goal, mode, document_ids: documentIds, parent_task_id: parentTaskId },
     {
       headers: { Authorization: `Bearer ${token}` },
-      timeout: 180000,
+      timeout: 20000,
     },
   )
   return resp.data

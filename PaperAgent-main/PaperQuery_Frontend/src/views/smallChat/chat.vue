@@ -2,9 +2,16 @@
   <div class="paper-chat border">
     <header class="chat-header">
       <div><h1 class="text-lg font-bold">论文问答</h1><p class="text-xs text-gray-500">围绕当前论文提问；支持引用与外部学术检索</p></div>
-      <select v-model="selectedModel" class="model-select" aria-label="选择模型">
-        <option v-for="item in modelStore.modelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-      </select>
+      <div ref="modelPicker" class="model-picker">
+        <button type="button" class="model-select" aria-label="选择模型" :aria-expanded="modelMenuOpen" aria-haspopup="menu" @click="modelMenuOpen = !modelMenuOpen" @keydown.esc="modelMenuOpen = false">
+          {{ modelStore.getModelLabel(selectedModel) }} <span aria-hidden="true">⌄</span>
+        </button>
+        <div v-if="modelMenuOpen" class="model-menu" role="menu" @keydown.esc="modelMenuOpen = false">
+          <button v-for="item in modelStore.modelOptions" :key="item.value" type="button" role="menuitemradio" :aria-checked="selectedModel === item.value" @click="selectedModel = item.value; modelMenuOpen = false">
+            {{ item.label }} <span v-if="selectedModel === item.value" aria-hidden="true">✓</span>
+          </button>
+        </div>
+      </div>
     </header>
     <main ref="messageContainer" class="chat-messages">
       <p v-if="!messages.length" class="text-sm text-gray-500">可以询问方法、实验和结论，也可以选中左侧段落后追问。</p>
@@ -25,8 +32,12 @@
 
 <style scoped>
 .paper-chat { display: flex; flex-direction: column; box-sizing: border-box; contain: inline-size; width: 100%; max-width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: clip; background: white; }
-.chat-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
-.model-select { max-width: 130px; padding: 5px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; }
+.chat-header { position: relative; z-index: 20; display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
+.model-picker { position: relative; flex: none; }
+.model-select { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 112px; padding: 6px 9px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #1f2937; font-size: 12px; }
+.model-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 30; width: 142px; padding: 4px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #1f2937; box-shadow: 0 8px 24px #1f293726; }
+.model-menu button { display: flex; justify-content: space-between; width: 100%; padding: 7px 8px; border-radius: 5px; text-align: left; font-size: 12px; }
+.model-menu button:hover, .model-menu button[aria-checked='true'] { background: #f1effa; color: #5548ad; }
 .chat-messages { flex: 1; min-width: 0; min-height: 0; max-width: 100%; overflow-x: hidden; overflow-y: auto; padding: 12px; }
 .chat-messages > div { min-width: 0; max-width: 100%; }
 .selected-quote { display: flex; justify-content: space-between; gap: 6px; min-width: 0; max-width: 100%; padding: 7px 12px; background: #f0f7ff; color: #475569; font-size: 12px; }
@@ -51,9 +62,15 @@ type PaperMessage = {
   citations?: CitationItem[]; externalPapers?: ExternalPaperResult;
   searchSteps?: string[]; searchState?: SearchProgress['state'];
   status?: 'thinking' | 'streaming' | 'done' | 'error'
+  startedAt?: number; thinkingMs?: number; durationMs?: number
 }
 const modelStore = useModelStore()
 const selectedModel = ref<ModelType>(modelStore.currentModel)
+const modelMenuOpen = ref(false)
+const modelPicker = ref<HTMLElement | null>(null)
+const closeModelMenuOutside = (event: PointerEvent) => {
+  if (!modelPicker.value?.contains(event.target as Node)) modelMenuOpen.value = false
+}
 const messages = ref<PaperMessage[]>([])
 const draft = ref('')
 const sending = ref(false)
@@ -89,13 +106,13 @@ const send = async () => {
   const context = messages.value.filter(item => item.role !== 'system' && item.content.trim()).slice(-6)
     .map(item => `${item.role === 'user' ? '用户' : '助手'}: ${item.content.slice(0, 800)}`).join('\n')
   messages.value.push({ role: 'user', content: question })
-  const reply = reactive<PaperMessage>({ role: 'gpt', content: '', modelLabel: modelStore.getModelLabel(selectedModel.value), status: 'thinking' })
+  const reply = reactive<PaperMessage>({ role: 'gpt', content: '', modelLabel: modelStore.getModelLabel(selectedModel.value), status: 'thinking', startedAt: Date.now() })
   messages.value.push(reply)
   persist()
   sending.value = true
   try {
     await askQuestionStream(question, [props.documentId], selectedModel.value, context,
-      text => { reply.content += text; reply.status = 'streaming'; scrollToBottom() },
+      text => { if (reply.thinkingMs == null) reply.thinkingMs = Date.now() - (reply.startedAt || Date.now()); reply.content += text; reply.status = 'streaming'; scrollToBottom() },
       citations => { reply.citations = citations },
       progress => {
         reply.searchState = progress.state
@@ -108,10 +125,11 @@ const send = async () => {
   } catch (error: any) {
     reply.status = 'error'
     reply.content ||= `请求失败：${error?.message || error}`
-  } finally { sending.value = false; persist(); scrollToBottom() }
+  } finally { reply.durationMs = Date.now() - (reply.startedAt || Date.now()); sending.value = false; persist(); scrollToBottom() }
 }
 
 const scrollToBottom = () => nextTick(() => { if (messageContainer.value) messageContainer.value.scrollTop = messageContainer.value.scrollHeight })
 watch(() => props.documentId, () => { messages.value = []; restore() })
-onMounted(restore)
+onMounted(() => { restore(); document.addEventListener('pointerdown', closeModelMenuOutside) })
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeModelMenuOutside))
 </script>

@@ -9,8 +9,8 @@ router = APIRouter()
 
 @router.post("/translate")
 def translate(translatetext: TranslateRequest, user=Depends(get_current_user)):
-    if len(translatetext.text) > 5000:
-        raise HTTPException(status_code=413, detail="单次翻译请少于 5000 个字符")
+    if len(translatetext.text) > 12000:
+        raise HTTPException(status_code=413, detail="单次翻译请少于 12000 个字符")
     try:
         result = Translator().translate(translatetext.text)
     except (ImportError, RuntimeError) as exc:

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 
 import dotenv
 
@@ -98,6 +99,14 @@ class ONNXEmbeddings(Embeddings):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 离线模型首次加载和推理可能超过前端普通请求的 10 秒预算。
+    # 启动时预热，后续选择论文文本可直接使用已缓存的翻译器。
+    try:
+        from core.backend.services.translate import Translator
+        await asyncio.to_thread(Translator().translate, "This paper presents a research method.")
+        print("[translate] 离线英中模型预热完成")
+    except Exception as exc:
+        print(f"[translate] 离线模型暂不可用：{exc}")
     app.llm = LLM()
     app.chroma_db = AcadeChroma(
         os.getenv("CHROMA_LAYER1_DIR"),

@@ -32,6 +32,14 @@
       </div>
       <div v-else class="render" v-html="renderContent(props.content)" @click="handleCitationClick" />
       <ExternalPaperList v-if="props.externalPapers?.items.length" :result="props.externalPapers" />
+      <div v-if="((props.status === 'thinking' || props.status === 'streaming') && props.startedAt) || props.durationMs != null" class="response-time" aria-live="polite">
+        <template v-if="props.status === 'thinking' || props.status === 'streaming'">
+          {{ props.status === 'thinking' ? '正在思考' : '正在回答' }} {{ formatDuration(Math.max(0, now - (props.startedAt || now))) }}
+        </template>
+        <template v-else-if="props.durationMs != null">
+          思考 {{ formatDuration(props.thinkingMs ?? props.durationMs) }} · {{ props.status === 'error' ? '等待耗时' : '回答耗时' }} {{ formatDuration(props.durationMs) }}
+        </template>
+      </div>
     </el-card>
   </div>
 
@@ -73,6 +81,7 @@
 .progress-step { display: flex; align-items: flex-start; gap: 8px; margin-top: 4px; color: #6b7280; font-size: 12px; line-height: 1.5; }
 .progress-marker { display: inline-flex; flex: 0 0 14px; color: #2b8a68; font-weight: 700; }
 .progress-marker.active { color: #7767c5; animation: thinking-pulse 1.2s ease-in-out infinite; }
+.response-time { margin-top: 8px; color: #8b8b92; font-size: 11px; font-variant-numeric: tabular-nums; }
 
 .thinking-state {
   display: inline-flex;
@@ -131,10 +140,22 @@ const props = defineProps<{
   searchState?: 'preparing' | 'searching' | 'answering' | 'done'
   searchSteps?: string[]
   status?: 'thinking' | 'streaming' | 'done' | 'error'
+  startedAt?: number
+  thinkingMs?: number
+  durationMs?: number
   documents?: ChatDocumentSnapshot[]
 }>()
 
 const router = useRouter()
+const now = ref(Date.now())
+let timer: ReturnType<typeof setInterval> | undefined
+watch(() => props.status, (status) => {
+  if (status === 'thinking' || status === 'streaming') {
+    if (!timer) timer = setInterval(() => { now.value = Date.now() }, 200)
+  } else if (timer) { clearInterval(timer); timer = undefined }
+}, { immediate: true })
+onBeforeUnmount(() => { if (timer) clearInterval(timer) })
+const formatDuration = (ms: number) => `${(ms / 1000).toFixed(1)} 秒`
 
 const highlightCode = (str: string, lang: string): string => {
   const language = hljs.getLanguage(lang)

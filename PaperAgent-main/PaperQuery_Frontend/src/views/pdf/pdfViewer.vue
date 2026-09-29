@@ -54,6 +54,7 @@ const basePageWidth = computed(() => Math.min(1050, Math.max(1, containerWidth.v
 const renderedPageWidth = computed(() => Math.round(basePageWidth.value * zoom.value / 100))
 let resizeObserver: ResizeObserver | undefined
 let selectionVersion = 0
+let translationTimer: ReturnType<typeof setTimeout> | undefined
 
 const setZoom = (value: number) => {
   zoom.value = Math.max(minZoom, Math.min(maxZoom, Math.round(value / zoomStep) * zoomStep))
@@ -80,7 +81,7 @@ const updateCurrentPage = () => {
   if (visible) page.value = Number(visible.dataset.pdfPage)
 }
 
-const handleMouseUp = async () => {
+const handleMouseUp = () => {
   const selection = window.getSelection()
   const text = selection?.toString().trim() || ''
   if (!text || !container.value?.contains(selection?.anchorNode)) return
@@ -92,14 +93,17 @@ const handleMouseUp = async () => {
   store.commit('setTranslatedText', '正在使用本地模型翻译…')
   const version = ++selectionVersion
   translating.value = true
-  try {
-    const response = await translateText(text)
-    if (version === selectionVersion) store.commit('setTranslatedText', response.data.text)
-  } catch (error: any) {
-    if (version === selectionVersion) store.commit('setTranslatedText', `翻译失败：${error?.message || '本地模型不可用'}`)
-  } finally {
-    translating.value = false
-  }
+  clearTimeout(translationTimer)
+  translationTimer = setTimeout(async () => {
+    try {
+      const response = await translateText(text)
+      if (version === selectionVersion) store.commit('setTranslatedText', response.data.text)
+    } catch (error: any) {
+      if (version === selectionVersion) store.commit('setTranslatedText', `翻译失败：${error?.message || '本地模型不可用'}`)
+    } finally {
+      if (version === selectionVersion) translating.value = false
+    }
+  }, 250)
 }
 
 onMounted(() => {
@@ -116,6 +120,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   selectionVersion++
+  clearTimeout(translationTimer)
   resizeObserver?.disconnect()
   container.value?.removeEventListener('wheel', handleWheel)
   if (pdfUrl.value) {

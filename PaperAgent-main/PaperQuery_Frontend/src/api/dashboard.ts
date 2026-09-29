@@ -32,6 +32,10 @@ export async function getNoteCollection(): Promise<NoteEntry[]> {
   return response.data.data
 }
 
+export async function deleteNote(knowledgeID: string, documentID: string): Promise<void> {
+  await api.delete(`/note/${encodeURIComponent(knowledgeID)}/${encodeURIComponent(documentID)}`, auth())
+}
+
 export async function recordReading(knowledgeID: string, documentID: string, seconds: number) {
   await api.post('/dashboard/reading', { knowledgeID, documentID, seconds }, auth())
 }

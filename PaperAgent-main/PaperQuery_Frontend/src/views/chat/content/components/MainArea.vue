@@ -17,6 +17,9 @@
           :search-state="message.searchState"
           :search-steps="message.searchSteps"
           :status="message.status"
+          :started-at="message.createdAt"
+          :thinking-ms="message.thinkingMs"
+          :duration-ms="message.durationMs"
           :documents="message.documents"
         />
       </div>

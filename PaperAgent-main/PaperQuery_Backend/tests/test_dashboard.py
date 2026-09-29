@@ -66,6 +66,18 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(updated["readings"][0]["hasNote"])
         self.assertEqual(self.client.get("/dashboard/overview").status_code, 401)
 
+    def test_delete_note_only_for_its_owner_and_keep_document(self):
+        denied = self.client.delete("/note/b/b-doc", headers=self.headers())
+        self.assertEqual(denied.status_code, 404)
+        self.assertEqual(len(self.client.get("/notes/collection", headers=self.headers("bob")).json()["data"]), 1)
+
+        deleted = self.client.delete("/note/a/a-doc", headers=self.headers())
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(self.client.get("/notes/collection", headers=self.headers()).json()["data"], [])
+        with self.Session() as db:
+            self.assertIsNotNone(db.query(Document).filter_by(uid="a-doc").first())
+        self.assertEqual(self.client.delete("/note/a/a-doc", headers=self.headers()).status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,8 @@ export type Message = {
   model?: string
   modelLabel?: string
   createdAt?: number
+  thinkingMs?: number
+  durationMs?: number
   citations?: CitationItem[]
   externalPapers?: ExternalPaperResult
   searchStatus?: string
@@ -85,6 +87,9 @@ export const useMessageListStore = defineStore('messageList', () => {
           status: 'streaming',
         })
       } else {
+        if (state.messageList[id].thinkingMs == null) {
+          state.messageList[id].thinkingMs = Date.now() - (state.messageList[id].createdAt || Date.now())
+        }
         state.messageList[id].content += content
         state.messageList[id].status = 'streaming'
       }
@@ -123,7 +128,9 @@ export const useMessageListStore = defineStore('messageList', () => {
         if (state.messageList[newId]) {
           state.messageList[newId].citations = citations
           state.messageList[newId].status = 'done'
+          state.messageList[newId].durationMs = Date.now() - (state.messageList[newId].createdAt || Date.now())
         }
+        saveHistorySnapshot()
         return updateMemory(question, memory, answer)
       })
       .then((data: any) => {
@@ -136,6 +143,7 @@ export const useMessageListStore = defineStore('messageList', () => {
         console.error(error)
         if (state.messageList[newId]) {
           state.messageList[newId].status = 'error'
+          state.messageList[newId].durationMs ??= Date.now() - (state.messageList[newId].createdAt || Date.now())
         }
         addSystemMessage(`模型调用失败：${error?.message || error}`)
       })

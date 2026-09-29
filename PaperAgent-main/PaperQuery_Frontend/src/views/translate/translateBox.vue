@@ -18,8 +18,8 @@
       <!-- Translate content -->
       <div v-show="TranDisplay" class="translation-scroll h-full overflow-auto p-4">
         <p class="mb-2 text-xs text-gray-500">选中左侧英文后自动使用本机模型翻译，不调用云端翻译 API。</p>
-        <div v-if="sourceText" class="translation-text mb-3 rounded border bg-gray-50 p-3 text-sm">{{ sourceText }}</div>
-        <div class="translation-text rounded border p-3 text-sm leading-relaxed">{{ translatedText || '请在论文中选中需要翻译的英文。' }}</div>
+        <div v-if="sourceText" class="translation-text mb-3 rounded border bg-gray-50 p-3 text-sm">{{ displaySourceText }}</div>
+        <div class="translation-text rounded border p-3 text-sm leading-relaxed">{{ displayTranslatedText || '请在论文中选中需要翻译的英文。' }}</div>
       </div>
 
       <!-- Note content -->
@@ -49,6 +49,14 @@ const translatedText = computed(() => {
   return store.getters.translatedText
 })
 const sourceText = computed(() => store.getters.selectedText)
+// PDF 文本层保留原页面的窄列换行；展示时重排，才能随分栏宽度重新流动。
+const displaySourceText = computed(() => String(sourceText.value || '')
+  .replace(/-\s*\r?\n\s*/g, '')
+  .replace(/\s+/g, ' ')
+  .trim())
+const displayTranslatedText = computed(() => String(translatedText.value || '')
+  .replace(/\s+/g, ' ')
+  .trim())
 
 onMounted(() => {
   store.commit('setTranslatedText', '')
@@ -84,14 +92,15 @@ const displayNote = () => {
   width: 100%;
 }
 .translation-panel {
-  overflow: hidden;
+  contain: inline-size;
+  overflow: clip;
 }
 .translation-text {
   box-sizing: border-box;
   min-width: 0;
   max-width: 100%;
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: break-all;
 }
 </style>

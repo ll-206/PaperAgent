@@ -317,11 +317,11 @@ const isOpen = ref(true)
 </script>
 
 <template>
-  <div class="flex-col w-full p-8">
-    <h1 class="text-2xl font-bold mb-8">论文文档</h1>
-    <div class="flex-col mb-6">
-      <div class="flex space-x-4 mb-6 w-full">
-        <Input v-model="search" type="text" placeholder="搜索" class="w-1/2" />
+  <div class="document-list-page w-full p-6">
+    <h1 class="text-2xl font-bold mb-5">论文文档</h1>
+    <div class="flex-col">
+      <div class="flex gap-3 mb-4 w-full">
+        <Input v-model="search" type="text" placeholder="搜索论文名称或标签" class="w-full max-w-xl" />
         <input
           ref="fileInput"
           type="file"
@@ -339,24 +339,26 @@ const isOpen = ref(true)
           上传文件
         </Button>
       </div>
-      <el-table :data="filterTableData" class="w-full" max-height="500">
+      <el-table :data="filterTableData" class="document-table w-full" max-height="calc(100vh - 190px)">
         <el-table-column
           fixed
           :formatter="formatterName"
           label="论文名称"
           prop="documentName"
         />
-        <el-table-column label="标签" prop="documentTags">
+        <el-table-column label="标签" prop="documentTags" min-width="300">
           <template #default="{ row }">
-            <div>
+            <div class="document-tags" :title="(row.documentTags || []).join('、')">
               <el-tag
-                v-for="(tag, index) in row.documentTags"
+                v-for="(tag, index) in (row.documentTags || []).slice(0, 3)"
                 :key="index"
                 :type="getTagType(index)"
-                style="margin-right: 4px"
+                size="small"
               >
-                <!-- 如果tag 是空不显示 -->
                 {{ tag }}
+              </el-tag>
+              <el-tag v-if="(row.documentTags || []).length > 3" size="small" type="info">
+                +{{ row.documentTags.length - 3 }}
               </el-tag>
             </div>
           </template>
@@ -418,9 +420,6 @@ const isOpen = ref(true)
           </template>
         </el-table-column>
       </el-table>
-      <div class="flex justify-center p-2">
-        <Label class="text-center color-gray">@github/paperQuery</Label>
-      </div>
     </div>
     <transition name="slide">
       <el-card v-show="uploadTaskStatus" class="fixed-card w-1/4">
@@ -465,6 +464,11 @@ const isOpen = ref(true)
 </template>
 
 <style scoped>
+.document-list-page { min-width: 0; }
+.document-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.document-tags .el-tag { max-width: 100%; }
+.document-table :deep(.el-table__cell) { padding: 7px 0; }
+.document-table :deep(.el-table__cell .cell) { line-height: 1.35; }
 /* 添加所需的自定义样式 */
 .ellipsis {
   white-space: nowrap;

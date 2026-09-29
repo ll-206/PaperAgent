@@ -45,7 +45,26 @@ const store = useStore()
 const page = ref(1)
 const container = ref<HTMLElement | null>(null)
 const translating = ref(false)
+const zoom = ref(100)
+const containerWidth = ref(0)
+const minZoom = 50
+const maxZoom = 250
+const zoomStep = 10
+const basePageWidth = computed(() => Math.min(1050, Math.max(1, containerWidth.value - 48)))
+const renderedPageWidth = computed(() => Math.round(basePageWidth.value * zoom.value / 100))
+let resizeObserver: ResizeObserver | undefined
 let selectionVersion = 0
+
+const setZoom = (value: number) => {
+  zoom.value = Math.max(minZoom, Math.min(maxZoom, Math.round(value / zoomStep) * zoomStep))
+}
+
+const handleWheel = (event: WheelEvent) => {
+  if (!event.ctrlKey) return
+  event.preventDefault()
+  if (event.deltaY === 0) return
+  setZoom(zoom.value + (event.deltaY < 0 ? zoomStep : -zoomStep))
+}
 
 const jumpToPage = (target: number) => {
   const valid = Math.max(1, Math.min(target, pages.value || 1))
@@ -85,10 +104,20 @@ const handleMouseUp = async () => {
 
 onMounted(() => {
   loadPdf()
+  if (container.value) {
+    resizeObserver = new ResizeObserver(([entry]) => {
+      containerWidth.value = entry?.target.clientWidth || 0
+    })
+    resizeObserver.observe(container.value)
+    containerWidth.value = container.value.clientWidth
+    container.value.addEventListener('wheel', handleWheel, { passive: false })
+  }
 })
 
 onBeforeUnmount(() => {
   selectionVersion++
+  resizeObserver?.disconnect()
+  container.value?.removeEventListener('wheel', handleWheel)
   if (pdfUrl.value) {
     URL.revokeObjectURL(pdfUrl.value)
   }
@@ -113,11 +142,16 @@ watch(() => route.query.page, async (value) => {
       <Button variant="ghost" :disabled="page <= 1" @click="jumpToPage(page - 1)">上一页</Button>
       <span>第 {{ page }} / {{ pages || '…' }} 页</span>
       <Button variant="ghost" :disabled="page >= pages" @click="jumpToPage(page + 1)">下一页</Button>
-      <span class="reader-hint">在左侧连续滚动阅读；选中文字可离线翻译并用于提问</span>
+      <span class="reader-hint">连续滚动阅读 · 选中文字可翻译 · Ctrl＋滚轮缩放</span>
+      <div class="zoom-controls" aria-label="论文缩放" title="在论文区域按 Ctrl＋鼠标滚轮也可缩放">
+        <Button variant="ghost" class="zoom-button" aria-label="缩小论文" title="缩小论文" :disabled="zoom <= minZoom" @click="setZoom(zoom - zoomStep)">−</Button>
+        <span class="zoom-value" aria-live="polite">{{ zoom }}%</span>
+        <Button variant="ghost" class="zoom-button" aria-label="放大论文" title="放大论文" :disabled="zoom >= maxZoom" @click="setZoom(zoom + zoomStep)">+</Button>
+      </div>
     </div>
     <div ref="container" class="pdf-container" @scroll.passive="updateCurrentPage" @mouseup="handleMouseUp">
-      <div v-for="pageNumber in pages" :key="pageNumber" :data-pdf-page="pageNumber" class="pdf-page">
-        <VuePDF :pdf="pdf" :page="pageNumber" text-layer fit-parent />
+      <div v-for="pageNumber in pages" :key="pageNumber" :data-pdf-page="pageNumber" class="pdf-page" :style="{ width: `${renderedPageWidth}px` }">
+        <VuePDF :pdf="pdf" :page="pageNumber" :width="renderedPageWidth" text-layer />
         <span class="page-label">{{ pageNumber }} / {{ pages }}</span>
       </div>
     </div>
@@ -125,10 +159,15 @@ watch(() => route.query.page, async (value) => {
 </template>
 
 <style scoped>
-.reader { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
-.reader-toolbar { flex: none; display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
+.reader { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; container-type: inline-size; }
+.reader-toolbar { flex: none; display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 0 12px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
 .reader-hint { margin-left: 16px; color: #6b7280; font-size: 12px; }
 .pdf-container { flex: 1; min-height: 0; overflow: auto; padding: 16px 24px 32px; background: #e9edf3; scroll-behavior: smooth; }
-.pdf-page { position: relative; width: min(100%, 1050px); margin: 0 auto 16px; background: white; box-shadow: 0 2px 10px #1f29371f; scroll-margin-top: 12px; }
+.pdf-page { position: relative; margin: 0 auto 16px; background: white; box-shadow: 0 2px 10px #1f29371f; scroll-margin-top: 12px; }
 .page-label { display: block; padding: 5px; text-align: center; color: #6b7280; font-size: 12px; }
+.zoom-controls { display: flex; align-items: center; flex: none; gap: 2px; margin-left: auto; white-space: nowrap; }
+.zoom-button { width: 28px; height: 28px; padding: 0; font-size: 18px; line-height: 1; }
+.zoom-value { min-width: 44px; text-align: center; color: #374151; font-size: 12px; font-variant-numeric: tabular-nums; }
+@container (max-width: 850px) { .reader-hint { display: none; } }
+@container (max-width: 470px) { .reader-toolbar { gap: 2px; padding: 0 4px; } .reader-toolbar > button { padding: 0 4px; } }
 </style>

@@ -24,7 +24,7 @@
 </template>
 
 <style scoped>
-.paper-chat { display: flex; flex-direction: column; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: hidden; background: white; }
+.paper-chat { display: flex; flex-direction: column; box-sizing: border-box; contain: inline-size; width: 100%; max-width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: clip; background: white; }
 .chat-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
 .model-select { max-width: 130px; padding: 5px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; }
 .chat-messages { flex: 1; min-width: 0; min-height: 0; max-width: 100%; overflow-x: hidden; overflow-y: auto; padding: 12px; }

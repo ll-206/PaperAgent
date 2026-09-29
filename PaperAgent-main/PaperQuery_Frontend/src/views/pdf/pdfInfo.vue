@@ -29,7 +29,7 @@
 </template>
 
 <style scoped>
-.reader-workspace { display: flex; flex: 1 1 0%; width: 100%; height: 100vh; min-width: 0; min-height: 0; overflow: hidden; }
+.reader-workspace { display: flex; flex: 1 1 0%; width: 100%; height: 100vh; min-width: 0; min-height: 0; overflow: clip; }
 .reader-handle { z-index: 10; background: #d4d9e5; transition: background-color .18s ease, box-shadow .18s ease; }
 .reader-handle:hover, .reader-handle:focus-visible { background: #6756c5; box-shadow: 0 0 0 3px rgba(103,86,197,.16); }
 .reader-handle :deep(div) { width: 18px; height: 24px; color: #5548ad; background: #fff; border: 1px solid #a9a1d6; }

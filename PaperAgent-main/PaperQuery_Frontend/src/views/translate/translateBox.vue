@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-col h-full w-full min-h-0 min-w-0 border">
+  <div class="translation-panel flex-col h-full w-full min-h-0 min-w-0 border">
     <div class="flex items-center justify-between p-2 border-b">
       <!-- <h1 class="text-xl font-bold">翻译</h1> -->
       <Tabs :default-value="route.query.tab === 'note' ? 'note' : 'translate'">
@@ -14,16 +14,16 @@
       </Tabs>
     </div>
     <!-- Content area -->
-    <div class="flex-grow min-h-0 overflow-hidden">
+    <div class="translation-body flex-grow min-h-0 overflow-hidden">
       <!-- Translate content -->
-      <div v-show="TranDisplay" class="h-full overflow-auto p-4">
+      <div v-show="TranDisplay" class="translation-scroll h-full overflow-auto p-4">
         <p class="mb-2 text-xs text-gray-500">选中左侧英文后自动使用本机模型翻译，不调用云端翻译 API。</p>
-        <div v-if="sourceText" class="mb-3 rounded border bg-gray-50 p-3 text-sm">{{ sourceText }}</div>
-        <div class="whitespace-pre-wrap rounded border p-3 text-sm leading-relaxed">{{ translatedText || '请在论文中选中需要翻译的英文。' }}</div>
+        <div v-if="sourceText" class="translation-text mb-3 rounded border bg-gray-50 p-3 text-sm">{{ sourceText }}</div>
+        <div class="translation-text rounded border p-3 text-sm leading-relaxed">{{ translatedText || '请在论文中选中需要翻译的英文。' }}</div>
       </div>
 
       <!-- Note content -->
-      <div v-if="!TranDisplay" class="h-full overflow-auto p-4">
+      <div v-if="!TranDisplay" class="translation-scroll h-full overflow-auto p-4">
         <note class="w-full h-full" :knowledgeID="knowledgeID" :documentID="documentID"></note>
       </div>
     </div>
@@ -74,5 +74,24 @@ const displayNote = () => {
 
 .flex-grow {
   flex-grow: 1;
+}
+.translation-panel,
+.translation-body,
+.translation-scroll {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+.translation-panel {
+  overflow: hidden;
+}
+.translation-text {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 </style>

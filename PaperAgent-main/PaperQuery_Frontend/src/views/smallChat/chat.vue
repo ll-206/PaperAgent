@@ -24,12 +24,13 @@
 </template>
 
 <style scoped>
-.paper-chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; background: white; }
-.chat-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
+.paper-chat { display: flex; flex-direction: column; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: hidden; background: white; }
+.chat-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
 .model-select { max-width: 130px; padding: 5px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; }
-.chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
-.selected-quote { display: flex; justify-content: space-between; gap: 6px; padding: 7px 12px; background: #f0f7ff; color: #475569; font-size: 12px; }
-.selected-quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-messages { flex: 1; min-width: 0; min-height: 0; max-width: 100%; overflow-x: hidden; overflow-y: auto; padding: 12px; }
+.chat-messages > div { min-width: 0; max-width: 100%; }
+.selected-quote { display: flex; justify-content: space-between; gap: 6px; min-width: 0; max-width: 100%; padding: 7px 12px; background: #f0f7ff; color: #475569; font-size: 12px; }
+.selected-quote span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selected-quote button { font-size: 18px; }
 .chat-composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #e5e7eb; }
 .chat-composer textarea { flex: 1; min-width: 0; resize: vertical; border: 1px solid #d1d5db; border-radius: 8px; padding: 7px; font-size: 13px; }

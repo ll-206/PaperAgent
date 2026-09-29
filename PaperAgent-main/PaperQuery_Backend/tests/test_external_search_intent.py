@@ -1,6 +1,9 @@
 import unittest
 
-from core.decision.external_search import classify_external_request
+from core.decision.external_search import (
+    classify_external_request, is_broad_paper_recommendation,
+    make_search_keywords, wants_recent_papers,
+)
 
 
 class ExternalSearchIntentTests(unittest.TestCase):
@@ -48,6 +51,13 @@ class ExternalSearchIntentTests(unittest.TestCase):
         for query in queries:
             with self.subTest(query=query):
                 self.assertIsNone(classify_external_request(query))
+
+    def test_generic_recent_recommendation_uses_searchable_terms(self):
+        question = "最近最新的论文有没有推荐的"
+        self.assertTrue(is_broad_paper_recommendation(question))
+        self.assertTrue(wants_recent_papers(question))
+        self.assertEqual(make_search_keywords(None, question, ""), ["machine learning"])
+        self.assertFalse(is_broad_paper_recommendation("最近联邦学习的论文有没有推荐的"))
 
 
 if __name__ == "__main__":

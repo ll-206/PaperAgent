@@ -11,7 +11,7 @@ INTENT_PROMPT = """你是科研助手意图分类器，判断用户请求属于�
 - MULTI_PAPER_QA：跨多篇论文比较或问答
 - RESEARCH_TASK：需要多步骤调研/比较/整理成报告的复杂科研目标
 - EXPERIMENT_TASK：需要调用实验工具执行的任务
-- GENERAL_CHAT：与论文无关的普通闲聊
+- GENERAL_CHAT：普通问候、一般知识问题，以及没有指定论文的常规提问；即使当前会话绑定了论文，只要用户没有要求依据论文回答，也可选此项
 
 严格输出 JSON，不要多余内容：
 {{"intent": "<上面之一>", "confidence": 0.0~1.0, "reason_code": "<简短理由>"}}

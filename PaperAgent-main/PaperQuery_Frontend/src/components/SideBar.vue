@@ -32,7 +32,7 @@
 
     <div class="sidebar-footer">
       <div class="status-orb"><CircleCheck :size="17" /></div>
-      <div><strong>服务正常</strong><span><i /> DeepSeek 已连接</span></div>
+      <div><strong>服务正常</strong></div>
     </div>
   </nav>
 </template>

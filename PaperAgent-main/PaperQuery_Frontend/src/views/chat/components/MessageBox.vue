@@ -1,11 +1,11 @@
 <template>
-  <div v-if="props.role === 'system'" class="flex justify-center">
+  <div v-if="props.role === 'system'" class="message-row flex justify-center">
     <div class="max-w-[72%] rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
       {{ props.content }}
     </div>
   </div>
 
-  <div v-else-if="props.role === 'gpt'" class="flex justify-start">
+  <div v-else-if="props.role === 'gpt'" class="message-row flex justify-start">
     <el-card shadow="hover" class="card rounded-3xl">
       <div
         v-if="props.modelLabel"
@@ -35,7 +35,7 @@
     </el-card>
   </div>
 
-  <div v-else class="flex justify-end">
+  <div v-else class="message-row flex justify-end">
     <el-card shadow="hover" class="back-color card rounded-3xl">
       <div v-if="props.documents?.length" class="attached-papers">
         <span v-for="document in props.documents" :key="document.documentID" class="attached-paper">📄 {{ document.documentName }}</span>
@@ -51,6 +51,13 @@
 .back-color {
   background-color: #f4f4f4;
 }
+.message-row { width: 100%; min-width: 0; overflow: hidden; }
+.card { box-sizing: border-box; min-width: 0; max-width: 100%; }
+:deep(.card .el-card__body) { min-width: 0; max-width: 100%; overflow: hidden; }
+:deep(.render) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+:deep(.render pre), :deep(.render table) { max-width: 100%; overflow-x: auto; }
+:deep(.render table) { display: block; }
+:deep(.render img) { max-width: 100%; height: auto; }
 
 :deep(.card) .el-card__body {
   padding: 14px 16px !important;

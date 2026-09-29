@@ -1,5 +1,7 @@
 import os
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -12,6 +14,7 @@ from core.backend.db.database import Base
 from core.backend.db.models import Document, TMPDocument, User
 from core.backend.router.dependencies import get_db
 from main import app
+from core.skills.base import SkillResult
 
 
 class AskAuthorizationTests(unittest.TestCase):
@@ -73,6 +76,42 @@ class AskAuthorizationTests(unittest.TestCase):
     def test_owned_library_and_temporary_documents_are_allowed(self):
         self.assertEqual(self.ask(self.token("alice"), ["alice-paper"]).status_code, 200)
         self.assertEqual(self.ask(self.token("alice"), ["alice-temp"]).status_code, 200)
+
+    def test_broad_recent_paper_request_has_useful_fallback_when_sources_fail(self):
+        class UnavailableSearch:
+            async def run(self, _args):
+                return SkillResult(ok=False, error_code="SEARCH_ERROR", error_message="source unavailable")
+
+        with patch.object(app, "chat_agents", {}, create=True), \
+             patch.object(app, "decision_engine", None, create=True), \
+             patch("core.backend.router.router_qa.PaperSearchSkill", UnavailableSearch):
+            response = self.client.post(
+                "/qa/stream",
+                headers={"Authorization": f"Bearer {self.token('alice')}"},
+                json={"question": "最近最新的论文有没有推荐的", "document_ids": []},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("machine learning", response.text)
+        self.assertIn("你想关注哪个方向", response.text)
+        self.assertNotIn("请调整研究领域或关键词后重试", response.text)
+
+    def test_general_question_without_papers_gets_normal_answer(self):
+        class FakeAgent:
+            def get_llm(self):
+                return object()
+
+            def chat_simple(self, _prompt):
+                yield SimpleNamespace(content="RAG 把检索到的资料用于生成回答。")
+
+        with patch.object(app, "chat_agents", {"deepseek": FakeAgent()}, create=True):
+            response = self.client.post(
+                "/qa/stream",
+                headers={"Authorization": f"Bearer {self.token('alice')}"},
+                json={"question": "什么是 RAG？", "document_ids": []},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"route": "GENERAL_CHAT"', response.text)
+        self.assertIn("RAG 把检索到的资料用于生成回答", response.text)
 
 
 if __name__ == "__main__":

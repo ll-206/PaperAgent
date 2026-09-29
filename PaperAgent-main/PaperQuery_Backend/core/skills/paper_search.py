@@ -1,7 +1,7 @@
 """paper_search：包装 arxiv_client，返回结构化论文列表。"""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ from core.skills.base import BaseSkill, SkillResult
 class PaperSearchInput(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     max_results: int = 10
+    recent: bool = False
 
 
 class PaperSearchSkill(BaseSkill):
@@ -22,9 +23,13 @@ class PaperSearchSkill(BaseSkill):
     async def execute(self, data: PaperSearchInput, ctx: dict) -> SkillResult:
         if not data.keywords:
             return SkillResult(ok=False, error_code="BAD_INPUT", error_message="关键词为空")
+        import arxiv
         from arxiv_client import PARAMS, ArxivClient
 
-        client = ArxivClient(max_results=data.max_results)
+        client = ArxivClient(
+            max_results=data.max_results,
+            sort_by=arxiv.SortCriterion.SubmittedDate if data.recent else arxiv.SortCriterion.Relevance,
+        )
         fetch_params = [
             PARAMS.TITLE,
             PARAMS.AUTHORS,
@@ -40,7 +45,7 @@ class PaperSearchSkill(BaseSkill):
             warning = f"arXiv 暂时不可用，已切换 OpenAlex: {e}"
             provider = "openalex"
             try:
-                papers = self._search_openalex(data.keywords, data.max_results)
+                papers = self._search_openalex(data.keywords, data.max_results, recent=data.recent)
             except Exception as fallback_error:
                 return SkillResult(
                     ok=False,
@@ -69,7 +74,7 @@ class PaperSearchSkill(BaseSkill):
                 provider = "openalex"
                 warning = "arXiv 未找到匹配论文，已切换 OpenAlex"
                 try:
-                    papers = self._search_openalex(data.keywords, data.max_results)
+                    papers = self._search_openalex(data.keywords, data.max_results, recent=data.recent)
                 except Exception as fallback_error:
                     return SkillResult(
                         ok=False,
@@ -89,16 +94,24 @@ class PaperSearchSkill(BaseSkill):
         return SkillResult(ok=True, output=output, artifacts=[artifact])
 
     @staticmethod
-    def _search_openalex(keywords: list[str], max_results: int) -> list[dict]:
+    def _search_openalex(keywords: list[str], max_results: int, recent: bool = False) -> list[dict]:
         """arXiv 限流时使用 OpenAlex 的公开论文元数据作为只读备用源。"""
         import requests
 
+        params = {
+            "search": " ".join(keywords),
+            "per-page": max(1, min(max_results, 20)),
+        }
+        if recent:
+            today = date.today()
+            params["filter"] = (
+                f"from_publication_date:{(today - timedelta(days=365)).isoformat()},"
+                f"to_publication_date:{today.isoformat()}"
+            )
+            params["sort"] = "publication_date:desc"
         response = requests.get(
             "https://api.openalex.org/works",
-            params={
-                "search": " ".join(keywords),
-                "per-page": max(1, min(max_results, 20)),
-            },
+            params=params,
             headers={"User-Agent": "PaperAgent/1.0"},
             timeout=30,
         )

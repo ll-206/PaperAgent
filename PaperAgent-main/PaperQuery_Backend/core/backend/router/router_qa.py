@@ -20,9 +20,11 @@ from core.backend.router.req_res_schema import QARequest
 from core.decision.engine import DecisionEngine
 from core.decision.external_search import (
     classify_external_request,
+    is_broad_paper_recommendation,
     make_research_prompt,
     make_search_keywords,
     normalize_papers,
+    wants_recent_papers,
 )
 from core.decision.prompts import ANSWER_PROMPT, GENERAL_CHAT_PROMPT
 from core.decision.schemas import EvidenceDecision, IntentType
@@ -96,6 +98,12 @@ def qa_stream(
                 "route": "EXTERNAL_RESEARCH",
                 "intent": IntentType.RESEARCH_TASK.value,
             })
+        elif not qa.document_ids:
+            yield _sse("meta", {
+                "trace_id": trace_id,
+                "route": "GENERAL_CHAT",
+                "intent": IntentType.GENERAL_CHAT.value,
+            })
         elif decision_engine is not None:
             intent = decision_engine.decide_intent(qa.question, qa.conversation_context)
             route = "GENERAL_CHAT" if intent.intent == IntentType.GENERAL_CHAT else "LOCAL_RAG"
@@ -106,8 +114,8 @@ def qa_stream(
             })
 
         # 普通聊天不需要论文证据，直接交给当前模型自然回答。
-        if intent is not None and intent.intent == IntentType.GENERAL_CHAT:
-            fallback_answer = "你好！很高兴见到你。你现在想查询、阅读或研究哪篇论文呢？"
+        if not external_kind and (not qa.document_ids or (intent is not None and intent.intent == IntentType.GENERAL_CHAT)):
+            fallback_answer = "当前问答模型暂时不可用，请稍后重试。"
             if agent is not None:
                 prompt = GENERAL_CHAT_PROMPT.format(
                     question=qa.question,
@@ -116,7 +124,7 @@ def qa_stream(
             yield _sse("decision", {
                 "decision": "GENERAL_CHAT",
                 "evidence_score": 1.0,
-                "confidence": intent.confidence,
+                "confidence": intent.confidence if intent is not None else 1.0,
             })
             streamed = False
             if agent is not None:
@@ -151,7 +159,7 @@ def qa_stream(
         evidence_text, citation_map = format_evidence(evidence)
 
         # 4. Evidence Judge
-        if decision_engine is not None:
+        if decision_engine is not None or external_kind:
             ev = (
                 EvidenceDecision(decision="SEARCH_EXTERNAL", confidence=1.0, evidence_score=0.0)
                 if external_kind
@@ -164,10 +172,14 @@ def qa_stream(
                 "confidence": ev.confidence,
             })
             if search_external:
-                yield _sse("search_status", {"state": "preparing", "text": "正在结合所选论文和目标领域提取检索词…"})
+                broad_request = is_broad_paper_recommendation(qa.question)
+                yield _sse("search_status", {
+                    "state": "preparing",
+                    "text": "正在准备近期论文检索…" if broad_request else "正在结合所选论文和目标领域提取检索词…",
+                })
                 keywords = (
                     make_search_keywords(
-                        decision_engine.llm,
+                        decision_engine.llm if decision_engine is not None else None,
                         qa.question,
                         evidence_text,
                         kind=external_kind or "literature",
@@ -180,7 +192,7 @@ def qa_stream(
                     "text": "正在检索 arXiv / OpenAlex：" + "、".join(keywords),
                 })
                 result = asyncio.run(PaperSearchSkill().run(
-                    {"keywords": keywords, "max_results": 8}
+                    {"keywords": keywords, "max_results": 8, "recent": wants_recent_papers(qa.question)}
                 ))
                 papers = normalize_papers(result.output.get("papers", [])) if result.ok else []
                 yield _sse("external_papers", {
@@ -206,7 +218,34 @@ def qa_stream(
                     else:
                         yield _sse("delta", {"text": "已找到相关论文，请查看下方结果并选择需要进一步阅读的 PDF。"})
                 else:
-                    yield _sse("delta", {"text": "已尝试外部学术搜索，但目前未取得可展示的论文结果。请调整研究领域或关键词后重试。"})
+                    yield _sse("search_status", {
+                        "state": "answering", "text": "学术来源暂未返回可核实的论文，正在整理下一步建议…",
+                    })
+                    fallback = (
+                        "我可以推荐近期论文，但目前学术检索源没有返回可核实的题录，因此不能编造具体篇名。"
+                        "你想关注哪个方向？例如大模型、计算机视觉、联邦学习或医学影像。"
+                        "指定领域后，我会重新检索并列出真实论文供你选择。"
+                    ) if broad_request else (
+                        "目前外部学术检索没有返回可核实的论文题录。"
+                        "我可以先帮你梳理这个问题的研究关键词和筛选思路；"
+                        "如果你给出更具体的领域、方法或时间范围，我会继续检索。"
+                    )
+                    streamed = False
+                    if agent is not None:
+                        prompt = (
+                            "你是 PaperAgent 学术助手。用户提出了下面的问题，但实时学术搜索没有返回可核实的论文题录。"
+                            "请先直接回应用户能做什么，给出简短、有用的研究方向或筛选建议，"
+                            "并询问最关键的领域偏好。不可编造具体论文标题、作者或最新发表事实；"
+                            "明确说明当前未取得可核实题录。\n用户问题：" + qa.question[:1000]
+                        )
+                        try:
+                            for text in _stream_model_text(agent, prompt):
+                                streamed = True
+                                yield _sse("delta", {"text": text})
+                        except Exception:
+                            pass
+                    if not streamed:
+                        yield _sse("delta", {"text": fallback})
                 yield _sse("search_status", {"state": "done", "text": "外部学术检索已完成"})
                 yield _sse("grounding", {"passed": False, "confidence": ev.confidence, "reason": "EXTERNAL_METADATA_ONLY"})
                 yield _sse("citations", {

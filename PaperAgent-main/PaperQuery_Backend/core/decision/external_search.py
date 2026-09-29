@@ -54,8 +54,29 @@ def is_transfer_request(question: str) -> bool:
     return classify_external_request(question) == "transfer"
 
 
+def is_broad_paper_recommendation(question: str) -> bool:
+    """Recognize requests for recent papers that contain no research topic."""
+    if classify_external_request(question) != "literature":
+        return False
+    remainder = re.sub(
+        r"最近|最新|近期|近来|今年|本月|本周|论文|文献|研究|工作|文章|推荐|介绍|"
+        r"有没有|有哪些|有无|哪些|什么|一些|几篇|值得|看看|想看|阅读|读|"
+        r"帮我|给我|请|相关|领域|方向|的|吗|呢|有|无|好|"
+        r"recent|latest|new|papers?|studies|literature|recommend|suggest|any|some|please|me",
+        "", question.lower(), flags=re.IGNORECASE,
+    )
+    return not re.sub(r"[\W\d_]+", "", remainder)
+
+
+def wants_recent_papers(question: str) -> bool:
+    return bool(re.search(r"最新|最近|近期|近年|今年|recent|latest|new|current", question, re.I))
+
+
 def make_search_keywords(llm, question: str, source_context: str, kind: str = "transfer") -> list[str]:
     """Use the selected paper context to form concise English academic terms."""
+    if is_broad_paper_recommendation(question):
+        # A recommendation with no field cannot be searched as a Chinese sentence.
+        return ["machine learning"]
     focus = (
         "兼顾目标领域与可迁移的方法"
         if kind == "transfer"
@@ -78,7 +99,21 @@ def make_search_keywords(llm, question: str, source_context: str, kind: str = "t
             return keywords[:3]
     except Exception:
         pass
-    # Preserve an actionable query when the model or JSON parser is unavailable.
+    # Do not send a full conversational sentence to arXiv as a keyword.
+    known_terms = {
+        "联邦学习": "federated learning", "大模型": "large language models",
+        "语言模型": "large language models", "检索增强": "retrieval augmented generation",
+        "计算机视觉": "computer vision", "医学影像": "medical imaging",
+        "推荐系统": "recommender systems", "时间序列": "time series forecasting",
+        "机器人": "robotics", "强化学习": "reinforcement learning",
+        "人工智能": "artificial intelligence", "机器学习": "machine learning",
+    }
+    matched = [english for chinese, english in known_terms.items() if chinese in question]
+    if matched:
+        return list(dict.fromkeys(matched))[:3]
+    english_words = re.findall(r"[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z][A-Za-z0-9-]*){0,3}", question)
+    if english_words:
+        return [english_words[0][:100]]
     return [question.strip()[:160]]
 
 

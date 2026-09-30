@@ -22,7 +22,7 @@ const teamName = ref('') // 注册时填团队名 = 提交加入申请（待管�
 const busy = ref(false)
 const router = useRouter()
 
-const url = ref('http://localhost:8001')
+const url = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001'
 
 // 向后端发送登录请求并将用户信息存储到 Vuex 和 localStorage 中
 const Login = async () => {
@@ -39,7 +39,7 @@ const Login = async () => {
 
   try {
     if (registering.value) {
-      const res = await register(url.value, {
+      const res = await register(url, {
         username: username.value,
         password: password.value,
         teamName: teamName.value,
@@ -49,7 +49,7 @@ const Login = async () => {
       ElNotification.success({ title: '注册成功', message: res?.msg || '请使用新账户登录' })
       return
     }
-    await login(url.value, user)
+    await login(url, user)
     ElNotification({
       title: '登录成功',
       type: 'success',

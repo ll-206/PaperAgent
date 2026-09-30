@@ -37,6 +37,6 @@ export const login = async (url: string, user: any): Promise<LoginResponse> => {
     }
     return response.data
   } catch (e: any) {
-    throw new Error(e.response.data.msg)
+    throw new Error(e?.response?.data?.msg || e?.response?.data?.detail || '登录失败，请检查服务器连接')
   }
 }

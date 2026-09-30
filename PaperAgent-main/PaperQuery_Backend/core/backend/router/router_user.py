@@ -49,7 +49,14 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     # 注册成功：若填写了团队名则提交加入申请（待管理员审批），团队不存在/无效也不阻塞注册
     if request.team_name and request.team_name.strip():
         team_name = request.team_name.strip()
+        # Keep the owner's username as a legacy join code, while also allowing the
+        # name shown on the team page to be used for new registration requests.
         team = db.query(Team).filter(Team.owner_username == team_name).first()
+        if not team:
+            matching_teams = db.query(Team).filter(Team.team_name == team_name).limit(2).all()
+            if len(matching_teams) > 1:
+                return {"status_code": 201, "msg": "注册成功，但有多个同名团队，未提交加入申请；请联系管理员"}
+            team = matching_teams[0] if matching_teams else None
         if team:
             exists_pending = db.query(TeamRequest).filter(
                 TeamRequest.applicant_username == user.username,

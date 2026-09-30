@@ -11,7 +11,26 @@
         <CardTitle>团队信息</CardTitle>
       </CardHeader>
       <CardContent v-if="teamInfo" class="text-sm space-y-1.5">
-        <p>团队名称：<span class="font-medium">{{ teamInfo.team_name }}</span></p>
+        <div class="flex flex-wrap items-center gap-2">
+          <span>团队名称：</span>
+          <template v-if="renaming">
+            <input
+              v-model="draftTeamName"
+              aria-label="新团队名称"
+              maxlength="50"
+              class="h-9 min-w-48 rounded-md border border-gray-300 bg-white px-3 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+              :disabled="savingName"
+              @keyup.enter="saveTeamName"
+              @keyup.esc="cancelRename"
+            />
+            <Button :disabled="savingName" @click="saveTeamName">{{ savingName ? '保存中…' : '保存' }}</Button>
+            <Button variant="ghost" :disabled="savingName" @click="cancelRename">取消</Button>
+          </template>
+          <template v-else>
+            <span class="font-medium">{{ teamInfo.team_name }}</span>
+            <Button variant="outline" @click="startRename">重命名</Button>
+          </template>
+        </div>
         <p>管理员：<span class="font-medium">{{ teamInfo.owner_username }}</span></p>
         <p>成员数量：<span class="font-medium">{{ teamInfo.members.length }}</span></p>
       </CardContent>
@@ -111,8 +130,44 @@ const teamInfo = ref<TeamInfo | null>(null)
 const members = ref<Member[]>([])
 const requests = ref<JoinRequest[]>([])
 const approving = ref('') // 正在审批的用户名，避免重复点击
+const renaming = ref(false)
+const draftTeamName = ref('')
+const savingName = ref(false)
 
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || ''}` })
+
+const startRename = () => {
+  draftTeamName.value = teamInfo.value?.team_name || ''
+  renaming.value = true
+}
+
+const cancelRename = () => {
+  renaming.value = false
+  draftTeamName.value = ''
+}
+
+const saveTeamName = async () => {
+  const name = draftTeamName.value.trim()
+  if (!name || name.length > 50) {
+    ElMessage.warning('团队名称需为 1–50 个字符')
+    return
+  }
+  if (name === teamInfo.value?.team_name) {
+    cancelRename()
+    return
+  }
+  savingName.value = true
+  try {
+    const { data } = await axios.post(`${base}/team/rename`, { team_name: name }, { headers: authHeader(), timeout: 10000 })
+    if (teamInfo.value) teamInfo.value.team_name = data.data.team_name
+    ElMessage.success('团队名称已更新')
+    cancelRename()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || '重命名失败')
+  } finally {
+    savingName.value = false
+  }
+}
 
 const loadTeam = async () => {
   try {

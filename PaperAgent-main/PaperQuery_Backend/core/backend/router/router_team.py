@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from core.backend.db.models import Team, TeamMember, TeamRequest, User
 from core.backend.router.dependencies import get_db
-from core.backend.schema.schema import TeamApproveRequest, TeamRejectRequest, TeamRemoveRequest
+from core.backend.schema.schema import TeamApproveRequest, TeamRejectRequest, TeamRemoveRequest, TeamRenameRequest
 from core.backend.utils.utils import get_current_user
 
 router = APIRouter()
@@ -33,6 +33,26 @@ def get_team_info(current_user: User = Depends(get_current_user), db: Session = 
             "members": [{"username": m.member_username, "joined_at": str(m.joined_at)} for m in members],
         },
     }
+
+
+@router.post("/team/rename")
+def rename_team(request: TeamRenameRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    team = require_admin_owner(current_user, db)
+    name = request.team_name.strip()
+    if not name or len(name) > 50:
+        raise HTTPException(422, "团队名称需为 1–50 个字符")
+    if name != team.team_name:
+        # Registration still accepts the owner's username for existing users. A team
+        # name must not collide with that identifier or another team's display name.
+        conflict = db.query(Team).filter(
+            Team.team_id != team.team_id,
+            (Team.team_name == name) | (Team.owner_username == name),
+        ).first()
+        if conflict:
+            raise HTTPException(409, "团队名称已被使用")
+        team.team_name = name
+        db.commit()
+    return {"status_code": 200, "msg": "团队名称已更新", "data": {"team_id": team.team_id, "team_name": team.team_name}}
 
 
 @router.get("/team/members")

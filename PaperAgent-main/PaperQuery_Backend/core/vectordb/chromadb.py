@@ -14,6 +14,7 @@ class AcadeChroma:
         self.chroma_db_layer2 = Chroma(persist_directory=persist_directory_layer2, embedding_function=embedding_model)
         self.current_layer1_count=self.chroma_db_layer1._collection.count()
         self.current_layer2_count=self.chroma_db_layer2._collection.count()
+        self.retrieval_enhancer = None
     # 增
     def add_paper_to_layer1(self,texts,metadatas):
         # 分批写入：一次性 embedding 整篇论文会让 ONNX 内存瞬间暴涨，
@@ -55,16 +56,24 @@ class AcadeChroma:
 
         用于替换旧的 str(docs) 返回，供 Citation、RRF、Grounding 使用。
         """
+        if self.retrieval_enhancer is not None:
+            try:
+                return self.retrieval_enhancer.search(
+                    self.chroma_db_layer1, query_str, filter, k
+                )
+            except Exception:
+                logger.exception("BGE hybrid retrieval failed; using the ONNX index")
+
         docs_scores = self.chroma_db_layer1.similarity_search_with_score(
             query_str, k=k, filter=filter
         )
         chunks: list[EvidenceChunk] = []
-        for doc, score in docs_scores:
+        for index, (doc, score) in enumerate(docs_scores):
             m = doc.metadata or {}
             document_id = m.get("documentID") or m.get("document_id") or ""
             page_number = m.get("page_number", 0)
             chunks.append(EvidenceChunk(
-                chunk_id=m.get("chunk_id") or f"{document_id}:p{page_number}",
+                chunk_id=m.get("chunk_id") or str(getattr(doc, "id", "") or f"{document_id}:p{page_number}:{index}"),
                 document_id=document_id,
                 knowledge_id=m.get("knowledge_name") or m.get("knowledgeID"),
                 source=m.get("source", ""),
@@ -73,6 +82,47 @@ class AcadeChroma:
                 dense_score=float(score),
             ))
         return chunks
+
+    def get_opening_evidence(self, document_ids: list[str]) -> list[EvidenceChunk]:
+        """Return the opening PDF chunks for a paper overview question.
+
+        Generic prompts such as "summarize this paper" are poor embedding
+        queries. Reading each selected paper's first page gives the model
+        actual title/abstract/introduction text with traceable citations.
+        """
+        result: list[EvidenceChunk] = []
+        per_document = 4 if len(document_ids) == 1 else 2
+        for document_id in dict.fromkeys(document_ids):
+            stored = self.chroma_db_layer1._collection.get(
+                where={"documentID": document_id},
+                include=["documents", "metadatas"],
+            )
+            rows = [
+                (index, doc_id, text, metadata or {})
+                for index, (doc_id, text, metadata) in enumerate(zip(
+                    stored.get("ids") or [],
+                    stored.get("documents") or [],
+                    stored.get("metadatas") or [],
+                ))
+                if text
+            ]
+            rows.sort(key=lambda row: (int(row[3].get("page_number", 0) or 0), row[0]))
+            seen_texts: set[str] = set()
+            for _, doc_id, text, metadata in rows:
+                if text in seen_texts:
+                    continue
+                seen_texts.add(text)
+                result.append(EvidenceChunk(
+                    chunk_id=metadata.get("chunk_id") or doc_id,
+                    document_id=document_id,
+                    knowledge_id=metadata.get("knowledge_name") or metadata.get("knowledgeID"),
+                    source=metadata.get("source", ""),
+                    page_number=int(metadata.get("page_number", 0) or 0),
+                    text=text,
+                ))
+                if len(seen_texts) >= per_document:
+                    break
+        return result
 
     
     # 删除指定 kid下的文档

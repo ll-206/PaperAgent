@@ -162,8 +162,24 @@ async def lifespan(app: FastAPI):
     # V2: DecisionEngine（轻量，基于 LLM Judge）
     app.decision_engine = DecisionEngine(app.llm.get_llm('deepseek'))
 
-    # Research 与 Ask 共用现有 ChromaDB/ONNX 向量检索。
-    app.retrieval_pipeline = None  # 兼容旧状态接口；不再加载 BGE 管线。
+    # 保留现有 ONNX 向量库；本地 BGE-M3 与重排模型用于二阶段混合检索。
+    # 模型缺失或加载失败时继续使用原有 ONNX 检索，已上传论文无需重建索引。
+    app.retrieval_pipeline = None
+    embedding_path = settings.BGE_M3_MODEL_PATH
+    reranker_path = settings.RERANKER_MODEL_PATH
+    if (
+        os.getenv("ENABLE_BGE_RETRIEVAL", "true").lower() in ("1", "true", "yes", "on")
+        and os.path.isfile(os.path.join(embedding_path, "pytorch_model.bin"))
+        and os.path.isfile(os.path.join(reranker_path, "model.safetensors"))
+    ):
+        try:
+            from core.retrieval.local_enhancer import LocalRetrievalEnhancer
+
+            app.retrieval_pipeline = LocalRetrievalEnhancer(embedding_path, reranker_path)
+            app.chroma_db.retrieval_enhancer = app.retrieval_pipeline
+            print("[retrieval] ONNX + BM25 + BGE-M3 + reranker 已就绪")
+        except Exception as exc:
+            print(f"[retrieval] 本地模型加载失败，继续使用 ONNX：{exc}")
 
     # V2: SkillRegistry + ResearchOrchestrator
     app.skill_registry = _build_skill_registry()

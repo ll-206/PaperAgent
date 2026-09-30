@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -33,6 +34,37 @@ from core.skills.paper_search import PaperSearchSkill
 
 router = APIRouter()
 
+_PAPER_REFERENCE = re.compile(
+    r"这(?:篇|些|两篇|几篇|多篇)(?:论文|文章|文献)|该(?:篇)?(?:论文|文章|文献)|"
+    r"本(?:篇|文|论文)|所选(?:论文|文献)|当前(?:论文|文献)|上述(?:论文|文献)|"
+    r"(?:选中|选定|上传|绑定)(?:的)?(?:论文|文章|文献|PDF)|"
+    r"(?:这|当前)(?:个|份)?PDF|"
+    r"(?:论文|文章|文献)(?:的|中|里|讲|介绍|总结|主要|核心)|"
+    r"\b(?:this|selected|attached|uploaded|current)\s+papers?\b",
+    re.IGNORECASE,
+)
+_PAPER_OVERVIEW = re.compile(
+    r"讲一下|介绍一下|概述|概括|总结|摘要|主要内容|核心内容|解读|"
+    r"(?:overview|summari[sz]e|introduce|explain)\b",
+    re.IGNORECASE,
+)
+
+
+def _targets_selected_paper(question: str, names: list[str]) -> bool:
+    query = question.strip()
+    if _PAPER_REFERENCE.search(query):
+        return True
+    if any(name.casefold() in query.casefold() for name in names if name):
+        return True
+    # A short deictic prompt after the user bound a PDF also targets that PDF.
+    return bool(re.fullmatch(r"(?:帮我|请|先)?(?:讲一下|介绍一下|总结一下|概括一下|解读一下)[。！？?\s]*", query))
+
+
+def _is_paper_overview(question: str) -> bool:
+    if re.search(r"实验|消融|公式|参数|数据集|评估|指标|具体结果|局限|缺点|细节", question):
+        return False
+    return bool(_PAPER_OVERVIEW.search(question))
+
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -58,20 +90,24 @@ def qa_stream(
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    selected_papers = []
     if qa.document_ids:
         selected_ids = set(qa.document_ids)
-        owned_ids = {
-            row.uid for row in db.query(Document.uid).filter(
+        owned_papers = {
+            row.uid: row for row in db.query(Document).filter(
                 Document.lid == user.workspace_lid, Document.uid.in_(selected_ids)
             ).all()
         }
-        owned_ids.update(
-            row.uid for row in db.query(TMPDocument.uid).filter(
+        owned_papers.update(
+            (row.uid, row) for row in db.query(TMPDocument).filter(
                 TMPDocument.lid == user.workspace_lid, TMPDocument.uid.in_(selected_ids)
             ).all()
         )
-        if not selected_ids.issubset(owned_ids):
+        if not selected_ids.issubset(owned_papers):
             raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
+        selected_papers = [owned_papers[document_id] for document_id in dict.fromkeys(qa.document_ids)]
+    selected_names = [paper.documentName for paper in selected_papers]
+    selected_paper_text = "、".join(selected_names) if selected_names else "无"
 
     # Count submitted Ask requests for this account. The event contains no question text.
     db.add(ActivityEvent(lid=user.workspace_lid, event_type="ask"))
@@ -104,13 +140,28 @@ def qa_stream(
                 "route": "GENERAL_CHAT",
                 "intent": IntentType.GENERAL_CHAT.value,
             })
+        elif _targets_selected_paper(qa.question, selected_names):
+            yield _sse("meta", {
+                "trace_id": trace_id,
+                "route": "LOCAL_RAG",
+                "intent": IntentType.MULTI_PAPER_QA.value if len(selected_papers) > 1 else IntentType.PAPER_QA.value,
+            })
         elif decision_engine is not None:
-            intent = decision_engine.decide_intent(qa.question, qa.conversation_context)
+            intent = decision_engine.decide_intent(
+                qa.question,
+                f"当前已选论文：{selected_paper_text}\n{qa.conversation_context}",
+            )
             route = "GENERAL_CHAT" if intent.intent == IntentType.GENERAL_CHAT else "LOCAL_RAG"
             yield _sse("meta", {
                 "trace_id": trace_id,
                 "route": route,
                 "intent": intent.intent.value,
+            })
+        else:
+            yield _sse("meta", {
+                "trace_id": trace_id,
+                "route": "LOCAL_RAG",
+                "intent": IntentType.PAPER_QA.value,
             })
 
         # 普通聊天不需要论文证据，直接交给当前模型自然回答。
@@ -120,6 +171,7 @@ def qa_stream(
                 prompt = GENERAL_CHAT_PROMPT.format(
                     question=qa.question,
                     conversation_context=qa.conversation_context or "（暂无）",
+                    selected_papers=selected_paper_text,
                 )
             yield _sse("decision", {
                 "decision": "GENERAL_CHAT",
@@ -149,22 +201,42 @@ def qa_stream(
         # 2. 检索
         evidence = []
         if chroma_db is not None and qa.document_ids:
-            evidence = chroma_db.search_evidence(
-                qa.question,
+            overview = _is_paper_overview(qa.question)
+            if overview and hasattr(chroma_db, "get_opening_evidence"):
+                evidence.extend(chroma_db.get_opening_evidence(qa.document_ids))
+            retrieved = chroma_db.search_evidence(
+                "paper abstract introduction main method contributions and results" if overview else qa.question,
                 {"documentID": {"$in": qa.document_ids}},
-                k=8,
+                k=4 if overview else 8,
             )
+            seen_chunks = {item.chunk_id for item in evidence}
+            seen_texts = {(item.document_id, item.text) for item in evidence}
+            for item in retrieved:
+                if item.chunk_id not in seen_chunks and (item.document_id, item.text) not in seen_texts:
+                    evidence.append(item)
+                    seen_chunks.add(item.chunk_id)
+                    seen_texts.add((item.document_id, item.text))
+            evidence = evidence[:8 if overview else 12]
+
+        if qa.document_ids and not evidence and not external_kind:
+            yield _sse("decision", {"decision": "ABSTAIN", "evidence_score": 0.0, "confidence": 1.0})
+            yield _sse("delta", {
+                "text": f"已选定 {selected_paper_text}，但当前尚未读取到可用于问答的论文文本。请确认论文处理状态为“完成”后重试。"
+            })
+            yield _sse("citations", {"items": []})
+            return
 
         # 3. 证据格式化 + 引用映射
         evidence_text, citation_map = format_evidence(evidence)
 
         # 4. Evidence Judge
         if decision_engine is not None or external_kind:
-            ev = (
-                EvidenceDecision(decision="SEARCH_EXTERNAL", confidence=1.0, evidence_score=0.0)
-                if external_kind
-                else decision_engine.decide_evidence(qa.question, evidence_text)
-            )
+            if external_kind:
+                ev = EvidenceDecision(decision="SEARCH_EXTERNAL", confidence=1.0, evidence_score=0.0)
+            elif _is_paper_overview(qa.question) and evidence:
+                ev = EvidenceDecision(decision="ANSWER", confidence=1.0, evidence_score=1.0)
+            else:
+                ev = decision_engine.decide_evidence(qa.question, evidence_text)
             search_external = ev.decision == "SEARCH_EXTERNAL"
             yield _sse("decision", {
                 "decision": "SEARCH_EXTERNAL" if search_external else ev.decision,
@@ -269,7 +341,11 @@ def qa_stream(
         # 5. Answer 生成（带引用）
         answer = ""
         if agent is not None:
-            prompt = ANSWER_PROMPT.format(question=qa.question, evidence=evidence_text)
+            prompt = ANSWER_PROMPT.format(
+                question=qa.question,
+                evidence=evidence_text,
+                selected_papers=selected_paper_text,
+            )
             for text in _stream_model_text(agent, prompt):
                 answer += text
                 yield _sse("delta", {"text": text})

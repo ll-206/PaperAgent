@@ -67,6 +67,11 @@ class TeamRejectRequest(BaseModel):
 # 删除成员（管理员操作）
 class TeamRemoveRequest(BaseModel):
     username: str
+
+
+class TeamRenameRequest(BaseModel):
+    team_name: str
+
 # 文件Document创建
 class DocumentCreate(BaseModel):
     uid : str 

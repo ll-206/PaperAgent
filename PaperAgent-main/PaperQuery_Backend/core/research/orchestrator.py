@@ -17,7 +17,11 @@ class ResearchOrchestrator:
 
     def run(self, goal: str, context: dict | None = None) -> TaskState:
         context = context or {}
-        plan = self.planner.plan(goal, task_id=context.get("_task_id"), llm=context.get("_research_llm"))
+        plan = self.planner.plan(
+            goal, task_id=context.get("_task_id"), llm=context.get("_research_llm"),
+            allowed_document_ids=context.get("allowed_document_ids"),
+            available_documents=context.get("available_documents"),
+        )
         if callable(context.get("_on_plan")):
             context["_on_plan"](plan)
         step_results = asyncio.run(self.executor.run(plan, context=context))

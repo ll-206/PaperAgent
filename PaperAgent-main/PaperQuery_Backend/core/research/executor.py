@@ -41,12 +41,6 @@ class Executor:
 
             skill = self.registry.get(step.skill)
             skill_input = self._resolve_references(step.input, step_outputs)
-            # 把前置步骤输出注入，供后续步骤引用
-            if step.depends_on:
-                skill_input["_previous_outputs"] = {
-                    dep: step_outputs.get(dep) for dep in step.depends_on
-                }
-
             if callable(run_context.get("_on_step_start")):
                 run_context["_on_step_start"](step)
 

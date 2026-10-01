@@ -104,7 +104,9 @@ class _ResearchTokenHeartbeat(BaseCallbackHandler):
 
 def _run_research_task(task_id: str, planning_goal: str, allowed_ids: list[str],
                        parent_task_id: str | None, prior_artifacts: list[dict],
-                       orchestrator, llm_provider, db_factory):
+                       orchestrator, llm_provider, db_factory,
+                       workspace_lid: str | None = None,
+                       available_documents: list[dict] | None = None):
     def touch():
         with db_factory() as session:
             task = session.query(ResearchTask).filter_by(task_id=task_id).first()
@@ -153,6 +155,8 @@ def _run_research_task(task_id: str, planning_goal: str, allowed_ids: list[str],
 
             context = {
                 "allowed_document_ids": allowed_ids,
+                "workspace_lid": workspace_lid,
+                "available_documents": available_documents,
                 "parent_task_id": parent_task_id,
                 "prior_artifacts": prior_artifacts,
                 "_task_id": task_id,
@@ -224,6 +228,11 @@ def create_task(
     if req.document_ids and not set(req.document_ids).issubset(owned_ids):
         raise HTTPException(status_code=403, detail="部分论文不在当前账号的资料库中")
     allowed_ids = list(dict.fromkeys(req.document_ids)) if req.document_ids else list(owned_ids)
+    available_documents = [
+        {"document_id": row.uid, "title": row.documentName}
+        for row in db.query(Document.uid, Document.documentName).filter(Document.lid == user.workspace_lid).all()
+        if row.uid in allowed_ids
+    ]
 
     parent = None
     prior_artifacts = []
@@ -256,6 +265,7 @@ def create_task(
         _run_research_task, task_id, planning_goal, allowed_ids,
         req.parent_task_id, prior_artifacts, orchestrator,
         getattr(request.app, "llm", None), db_factory,
+        user.workspace_lid, available_documents,
     )
     return {
         "status_code": 200,

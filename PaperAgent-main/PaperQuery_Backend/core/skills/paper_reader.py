@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import os
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from core.skills.base import BaseSkill, SkillResult
 
 
 class PaperReaderInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     document_id: str
     page: int = 1
-    document_path: str = ""
 
 
 class PaperReaderSkill(BaseSkill):
@@ -20,21 +20,25 @@ class PaperReaderSkill(BaseSkill):
     input_model = PaperReaderInput
 
     async def execute(self, data: PaperReaderInput, ctx: dict) -> SkillResult:
-        path = data.document_path
-        if not path:
-            db_factory = ctx.get("db_factory")
-            if db_factory is None:
-                return SkillResult(ok=False, error_code="NO_DB", error_message="数据库未注入")
-            from core.backend.crud.crud_document import get_document_by_uid
+        if data.document_id not in ctx.get("allowed_document_ids", []):
+            return SkillResult(ok=False, error_code="FORBIDDEN_DOCUMENT", error_message="论文不在当前任务允许的范围内")
+        db_factory = ctx.get("db_factory")
+        if db_factory is None:
+            return SkillResult(ok=False, error_code="NO_DB", error_message="数据库未注入")
+        from core.backend.db.models import Document
 
-            db = db_factory()
-            try:
-                doc = get_document_by_uid(db, data.document_id)
-            finally:
-                db.close()
+        db = db_factory()
+        try:
+            query = db.query(Document).filter(Document.uid == data.document_id)
+            if ctx.get("workspace_lid"):
+                query = query.filter(Document.lid == ctx["workspace_lid"])
+            doc = query.first()
             if doc is None:
                 return SkillResult(ok=False, error_code="NOT_FOUND", error_message="文档不存在")
-            path = os.getenv("AcadeAgent_DIR", ".") + doc.documentPath
+            path = (doc.documentPath if os.path.exists(doc.documentPath)
+                    else os.getenv("AcadeAgent_DIR", ".") + doc.documentPath)
+        finally:
+            db.close()
 
         if not os.path.exists(path):
             return SkillResult(ok=False, error_code="FILE_NOT_FOUND", error_message=f"文件不存在: {path}")
